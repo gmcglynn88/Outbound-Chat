@@ -57,18 +57,30 @@
   <div id="statusMessage"></div>
 
   <script>
-    const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-    const redirectUri = 'https://gmcglynn88.github.io/Outbound-Chat/';
+    // --- CONFIGURE THESE ---
+    const clientId     = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
+    const redirectUri  = 'https://gmcglynn88.github.io/Outbound-Chat/'; // ensure this exact string is whitelisted
     const responseType = 'token';
-    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=${responseType}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const scopes       = ['conversation.chat','routing.queues.read','directory.users.read']; 
+    // -----------------------
+
+    const oauthUrl = [
+      'https://login.mypurecloud.ie/oauth/authorize?',
+      `client_id=${clientId}`,
+      `response_type=${responseType}`,
+      `redirect_uri=${encodeURIComponent(redirectUri)}`,
+      `scope=${encodeURIComponent(scopes.join(' '))}`,
+      'state=chatDemo'
+    ].join('&');
 
     document.addEventListener('DOMContentLoaded', () => {
-      const hash = window.location.hash.substring(1);
+      const hash   = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
-      const token = params.get('access_token');
+      const token  = params.get('access_token');
 
       if (!token) {
-        window.location.href = oauthUrl;
+        // no token? off you go to authenticate
+        window.location.replace(oauthUrl);
       } else {
         initializeApp(token);
       }
@@ -83,19 +95,13 @@
     async function populateDropdowns(token) {
       try {
         const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
-        const users = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token);
+        const users  = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token);
 
         const queueSelect = document.getElementById('queueSelect');
-        queues.forEach(q => {
-          const opt = new Option(q.name, q.id);
-          queueSelect.add(opt);
-        });
+        queues.forEach(q => queueSelect.add(new Option(q.name, q.id)));
 
         const userSelect = document.getElementById('userSelect');
-        users.forEach(u => {
-          const opt = new Option(u.name, u.id);
-          userSelect.add(opt);
-        });
+        users.forEach(u  => userSelect.add(new Option(u.name, u.id)));
 
       } catch (err) {
         console.error('Dropdown load fail:', err);
@@ -120,10 +126,11 @@
     }
 
     async function createChat(token) {
-      const queueId = document.getElementById('queueSelect').value;
-      const userId = document.getElementById('userSelect').value;
+      const queueId           = document.getElementById('queueSelect').value;
+      const userId            = document.getElementById('userSelect').value;
       const externalReference = document.getElementById('externalReference').value;
-      const statusEl = document.getElementById('statusMessage');
+      const statusEl          = document.getElementById('statusMessage');
+
       statusEl.innerText = '🚀 Launching chat session…';
 
       try {
@@ -131,7 +138,7 @@
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            'Content-Type':  'application/json'
           },
           body: JSON.stringify({
             queueId: queueId,
@@ -143,9 +150,6 @@
 
         const chat = await resp.json();
         statusEl.innerText = `💬 Chat ${chat.id} is live! Ready for action.`;
-
-        // Optionally, you could open the chat in a new window:
-        // window.open(`https://apps.mypurecloud.ie/agent/chat/${chat.id}`, '_blank');
 
       } catch (err) {
         console.error('Chat creation error:', err);
