@@ -34,15 +34,13 @@
   <div id="statusMessage"></div>
 
   <script>
-    // === CONFIG ===
+    // --- CONFIG ---
     const clientId     = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-    const redirectUri  = 'https://gmcglynn88.github.io/Outbound-Chat/'; 
+    const redirectUri  = 'https://gmcglynn88.github.io/Outbound-Chat/';
     const responseType = 'token';
-    // Make sure 'Implicit Grant' is enabled in PureCloud for this client!
     const scopes       = ['conversation.chat','routing.queues.read','directory.users.read'];
-    // ==============
-    
-    // Build the OAuth URL
+    // ----------------
+
     const oauthUrl = [
       'https://login.mypurecloud.ie/oauth/authorize?',
       `client_id=${clientId}`,
@@ -52,19 +50,12 @@
       'state=chatDemo'
     ].join('&');
 
-    console.debug('OAuth URL:', oauthUrl);  // 👉 Open your browser console and check this matches exactly.
-
     document.addEventListener('DOMContentLoaded', () => {
       const hash   = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
       const token  = params.get('access_token');
-
-      if (!token) {
-        // No token? Redirect to OAuth.
-        window.location.replace(oauthUrl);
-      } else {
-        initializeApp(token);
-      }
+      if (!token) window.location.replace(oauthUrl);
+      else initializeApp(token);
     });
 
     function initializeApp(token) {
@@ -76,8 +67,7 @@
     async function populateDropdowns(token) {
       try {
         const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
-        const users  = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token);
-
+        const users  = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users',       token);
         queues.forEach(q => document.getElementById('queueSelect')
                                   .add(new Option(q.name, q.id)));
         users.forEach(u  => document.getElementById('userSelect')
@@ -98,7 +88,7 @@
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
         const js = await res.json();
         items = items.concat(js.entities);
-        more = js.pageCount > page;
+        more  = js.pageCount > page;
         page++;
       }
       return items;
@@ -109,9 +99,10 @@
       const userId            = document.getElementById('userSelect').value;
       const externalReference = document.getElementById('externalReference').value;
       const statusEl          = document.getElementById('statusMessage');
-
       statusEl.innerText = '🚀 Launching chat session…';
+
       try {
+        // 1) Create chat
         const resp = await fetch('https://api.mypurecloud.ie/api/v2/conversations/chats', {
           method: 'POST',
           headers: {
@@ -121,15 +112,42 @@
           body: JSON.stringify({
             queueId,
             routingTarget: { userId },
-            attributes: { 'External Link': externalReference }
+            attributes:    { 'External Link': externalReference }
           })
         });
         if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
         const chat = await resp.json();
-        statusEl.innerText = `💬 Chat ${chat.id} is live! Ready for action.`;
-      } catch (err) {
-        console.error('Chat creation error:', err);
-        statusEl.innerText = `😵 Oops! Could not start chat: ${err.message}`;
+
+        // 2) Fetch conversation details to find participantId
+        const detailsResp = await fetch(
+          `https://api.mypurecloud.ie/api/v2/conversations/chats/${chat.id}`, 
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (!detailsResp.ok) throw new Error(`${detailsResp.status} ${detailsResp.statusText}`);
+        const details = await detailsResp.json();
+        // find the “agent” participant
+        const agentPart = details.participants.find(p => p.purpose === 'agent');
+        if (!agentPart) throw new Error('No agent participant to replace.');
+
+        // 3) Replace that participant with your selected user
+        const replaceResp = await fetch(
+          `https://api.mypurecloud.ie/api/v2/conversations/chats/${chat.id}/participants/${agentPart.id}/replace`, 
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type':  'application/json'
+            },
+            body: JSON.stringify({ userId })
+          }
+        );
+        if (!replaceResp.ok) throw new Error(`${replaceResp.status} ${replaceResp.statusText}`);
+
+        statusEl.innerText = `💬 Chat ${chat.id} is live and assigned to user ${userId}!`;
+      }
+      catch (err) {
+        console.error('Chat creation/assignment error:', err);
+        statusEl.innerText = `😵 Oops! ${err.message}`;
       }
     }
   </script>
