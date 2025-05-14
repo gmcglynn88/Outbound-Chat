@@ -2,38 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>External Work Chat</title>
   <link href="https://fonts.googleapis.com/css2?family=Proxima+Nova&display=swap" rel="stylesheet">
   <style>
-    body {
-      font-family: 'Proxima Nova', Arial, sans-serif;
-      margin: 20px;
-      padding: 20px;
-    }
-    #logo-container {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    #logo {
-      width: 300px;
-    }
-    label {
-      margin-top: 10px;
-      display: block;
-      font-weight: bold;
-    }
-    select, input, button {
-      margin-top: 5px;
-      padding: 8px;
-      width: 100%;
-      max-width: 300px;
-    }
-    #statusMessage {
-      margin-top: 20px;
-      font-style: italic;
-      color: #2a7f62;
-    }
+    body { font-family: 'Proxima Nova', Arial, sans-serif; margin: 20px; padding: 20px; }
+    #logo-container { text-align: center; margin-bottom: 20px; }
+    #logo { width: 300px; }
+    label { margin-top: 10px; display: block; font-weight: bold; }
+    select, input, button { margin-top: 5px; padding: 8px; width: 100%; max-width: 300px; }
+    #statusMessage { margin-top: 20px; font-style: italic; color: #2a7f62; }
   </style>
 </head>
 <body>
@@ -53,17 +31,18 @@
   <input type="text" id="externalReference" placeholder="Enter external reference (optional)">
 
   <button id="createInteractionBtn">Start Chat Session</button>
-
   <div id="statusMessage"></div>
 
   <script>
-    // --- CONFIGURE THESE ---
+    // === CONFIG ===
     const clientId     = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-    const redirectUri  = 'https://gmcglynn88.github.io/Outbound-Chat/'; // ensure this exact string is whitelisted
+    const redirectUri  = 'https://gmcglynn88.github.io/Outbound-Chat/'; 
     const responseType = 'token';
-    const scopes       = ['conversation.chat','routing.queues.read','directory.users.read']; 
-    // -----------------------
-
+    // Make sure 'Implicit Grant' is enabled in PureCloud for this client!
+    const scopes       = ['conversation.chat','routing.queues.read','directory.users.read'];
+    // ==============
+    
+    // Build the OAuth URL
     const oauthUrl = [
       'https://login.mypurecloud.ie/oauth/authorize?',
       `client_id=${clientId}`,
@@ -73,13 +52,15 @@
       'state=chatDemo'
     ].join('&');
 
+    console.debug('OAuth URL:', oauthUrl);  // 👉 Open your browser console and check this matches exactly.
+
     document.addEventListener('DOMContentLoaded', () => {
       const hash   = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
       const token  = params.get('access_token');
 
       if (!token) {
-        // no token? off you go to authenticate
+        // No token? Redirect to OAuth.
         window.location.replace(oauthUrl);
       } else {
         initializeApp(token);
@@ -97,12 +78,10 @@
         const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
         const users  = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token);
 
-        const queueSelect = document.getElementById('queueSelect');
-        queues.forEach(q => queueSelect.add(new Option(q.name, q.id)));
-
-        const userSelect = document.getElementById('userSelect');
-        users.forEach(u  => userSelect.add(new Option(u.name, u.id)));
-
+        queues.forEach(q => document.getElementById('queueSelect')
+                                  .add(new Option(q.name, q.id)));
+        users.forEach(u  => document.getElementById('userSelect')
+                                  .add(new Option(u.name, u.id)));
       } catch (err) {
         console.error('Dropdown load fail:', err);
         document.getElementById('statusMessage')
@@ -132,7 +111,6 @@
       const statusEl          = document.getElementById('statusMessage');
 
       statusEl.innerText = '🚀 Launching chat session…';
-
       try {
         const resp = await fetch('https://api.mypurecloud.ie/api/v2/conversations/chats', {
           method: 'POST',
@@ -141,16 +119,14 @@
             'Content-Type':  'application/json'
           },
           body: JSON.stringify({
-            queueId: queueId,
-            routingTarget: { userId: userId },
+            queueId,
+            routingTarget: { userId },
             attributes: { 'External Link': externalReference }
           })
         });
         if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-
         const chat = await resp.json();
         statusEl.innerText = `💬 Chat ${chat.id} is live! Ready for action.`;
-
       } catch (err) {
         console.error('Chat creation error:', err);
         statusEl.innerText = `😵 Oops! Could not start chat: ${err.message}`;
