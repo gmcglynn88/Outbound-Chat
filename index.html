@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>External Work Outbound Call</title>
+  <title>External Work Contact</title>
   <link href="https://fonts.googleapis.com/css2?family=Proxima+Nova&display=swap" rel="stylesheet">
   <style>
     body { font-family:'Proxima Nova',Arial,sans-serif; margin:20px; padding:20px }
     #logo-container { text-align:center; margin-bottom:20px }
     #logo { width:300px }
     label { display:block; margin-top:10px; font-weight:bold }
-    select,input,button { width:100%; max-width:300px; padding:8px; margin-top:5px }
+    select, input, button { width:100%; max-width:300px; padding:8px; margin-top:5px }
     #statusMessage { margin-top:20px; font-style:italic; color:#2a7f62 }
   </style>
 </head>
@@ -19,28 +19,38 @@
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
 
-  <h1>External Work Outbound Call</h1>
+  <h1>External Work Contact</h1>
 
   <label for="queueSelect">Select Queue:</label>
   <select id="queueSelect"></select>
 
-  <label for="phoneNumber">Phone Number to Dial:</label>
+  <label for="userSelect">Select Agent:</label>
+  <select id="userSelect"></select>
+
+  <label for="emailAddress">Email Address (optional):</label>
+  <input type="email" id="emailAddress" placeholder="e.g. user@example.com">
+
+  <label for="phoneNumber">Phone Number (optional):</label>
   <input type="tel" id="phoneNumber" placeholder="e.g. +441234567890">
 
-  <button id="startCallBtn">Place Call</button>
+  <button id="createInteractionBtn">Connect</button>
   <div id="statusMessage"></div>
 
   <script>
-    // ——— CONFIG ———
+    // --- CONFIG ---
     const clientId     = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
     const redirectUri  = 'https://gmcglynn88.github.io/Outbound-Chat/';
     const responseType = 'token';
-    // You’ll need these scopes enabled on your OAuth client:
-    const scopes = [
-      'conversation.calls.create',
-      'routing.queues.read'
+    const scopes       = [
+      'conversation.email.create',
+      'conversation.messaging.create',
+      'conversation.participants.create',
+      'routing.queues.read',
+      'directory.users.read'
     ];
-    // ——————————
+    const messagingIntegrationId = '<YOUR_INTEGRATION_ID>'; // for SMS
+    const provider               = 'sms'; // or "whatsapp", etc.
+    // ----------------
 
     const oauthUrl = [
       'https://login.mypurecloud.ie/oauth/authorize?',
@@ -48,71 +58,120 @@
       `response_type=${responseType}`,
       `redirect_uri=${encodeURIComponent(redirectUri)}`,
       `scope=${encodeURIComponent(scopes.join(' '))}`,
-      'state=callDemo'
+      'state=multiDemo'
     ].join('&');
 
     document.addEventListener('DOMContentLoaded', () => {
       const hash   = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
       const token  = params.get('access_token');
-      if (!token) {
-        window.location.replace(oauthUrl);
-      } else {
-        init(token);
-      }
+      if (!token) return window.location.replace(oauthUrl);
+      initializeApp(token);
     });
 
-    function init(token) {
-      loadQueues(token);
-      document.getElementById('startCallBtn')
-              .addEventListener('click', () => placeCall(token));
+    function initializeApp(token) {
+      populateDropdowns(token);
+      document.getElementById('createInteractionBtn')
+              .addEventListener('click', () => connectExternal(token));
     }
 
-    async function loadQueues(token) {
-      try {
-        const res = await fetch('https://api.mypurecloud.ie/api/v2/routing/queues?pageSize=50', {
+    async function populateDropdowns(token) {
+      const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
+      const users  = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users',       token);
+      const qSel   = document.getElementById('queueSelect');
+      const uSel   = document.getElementById('userSelect');
+      queues.forEach(q => qSel.add(new Option(q.name, q.id)));
+      users .forEach(u => uSel.add(new Option(u.name, u.id)));
+    }
+
+    async function fetchAllPages(url, token) {
+      let items = [], page = 1, more = true;
+      while (more) {
+        const res = await fetch(`${url}?pageNumber=${page}&pageSize=25`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        const data = await res.json();
-        const sel  = document.getElementById('queueSelect');
-        data.entities.forEach(q => sel.add(new Option(q.name, q.id)));
-      } catch (err) {
-        console.error('Failed to load queues:', err);
-        document.getElementById('statusMessage')
-                .innerText = `🙈 Couldn’t load queues: ${err.message}`;
+        const js = await res.json();
+        items = items.concat(js.entities);
+        more  = js.pageCount > page;
+        page++;
       }
+      return items;
     }
 
-    async function placeCall(token) {
-      const queueId  = document.getElementById('queueSelect').value;
-      const toNumber = document.getElementById('phoneNumber').value.trim();
-      const statusEl = document.getElementById('statusMessage');
+    async function connectExternal(token) {
+      const queueId   = document.getElementById('queueSelect').value;
+      const userId    = document.getElementById('userSelect').value;
+      const emailAddr = document.getElementById('emailAddress').value.trim();
+      const phoneNum  = document.getElementById('phoneNumber').value.trim();
+      const statusEl  = document.getElementById('statusMessage');
 
-      if (!queueId || !toNumber) {
-        return statusEl.innerText = '⚠️ Please select a queue and enter a phone number.';
+      if (!emailAddr && !phoneNum) {
+        return statusEl.innerText = '⚠️ Please enter either an email address or phone number.';
       }
 
-      statusEl.innerText = '📞 Placing call…';
+      statusEl.innerText = '🚀 Initiating…';
 
       try {
-        const resp = await fetch('https://api.mypurecloud.ie/api/v2/conversations/calls', {
+        let convo;
+
+        if (emailAddr) {
+          // Email conversation
+          const resp = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type':  'application/json'
+            },
+            body: JSON.stringify({
+              queueId,
+              toAddress:  emailAddr,
+              fromName:   'External Work',
+              attributes: {}
+            })
+          });
+          if (!resp.ok) throw new Error(`Email API ${resp.status} ${resp.statusText}`);
+          convo = await resp.json();
+        } else {
+          // SMS conversation
+          const resp = await fetch('https://api.mypurecloud.ie/api/v2/conversations/messaging/conversations', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type':  'application/json'
+            },
+            body: JSON.stringify({
+              queueId,
+              messagingSetting: { integrationId: messagingIntegrationId },
+              toAddress:        phoneNum,
+              provider,
+              attributes:       {}
+            })
+          });
+          if (!resp.ok) throw new Error(`Messaging API ${resp.status} ${resp.statusText}`);
+          convo = await resp.json();
+        }
+
+        // Inject agent
+        const partUrl = convo.hasOwnProperty('fromAddress')
+          ? `https://api.mypurecloud.ie/api/v2/conversations/emails/${convo.id}/participants`
+          : `https://api.mypurecloud.ie/api/v2/conversations/messaging/conversations/${convo.id}/participants`;
+
+        const partResp = await fetch(partUrl, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type':  'application/json'
           },
-          body: JSON.stringify({
-            queueId:   queueId,
-            toAddress: toNumber
-          })
+          body: JSON.stringify({ userId, purpose: 'agent' })
         });
-        if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-        const call = await resp.json();
-        statusEl.innerText = `✅ Call ${call.id} initiated—agents in queue will be rung shortly.`;
-      } catch (err) {
-        console.error('Call error:', err);
-        statusEl.innerText = `😵 Oops, call failed: ${err.message}`;
+        if (!partResp.ok) throw new Error(`Participant API ${partResp.status} ${partResp.statusText}`);
+
+        statusEl.innerText = `✅ Conversation ${convo.id} open and assigned to ${userId}!`;
+      }
+      catch (err) {
+        console.error(err);
+        statusEl.innerText = `😵 Oops: ${err.message}`;
       }
     }
   </script>
