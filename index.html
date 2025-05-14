@@ -38,7 +38,14 @@
     const clientId     = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
     const redirectUri  = 'https://gmcglynn88.github.io/Outbound-Chat/';
     const responseType = 'token';
-    const scopes       = ['conversation.chat','routing.queues.read','directory.users.read'];
+    // Added participant scopes so we can replace them
+    const scopes = [
+      'conversation.chat',
+      'routing.queues.read',
+      'directory.users.read',
+      'conversation.participants.read',
+      'conversation.participants.replace'
+    ];
     // ----------------
 
     const oauthUrl = [
@@ -109,27 +116,25 @@
             'Authorization': `Bearer ${token}`,
             'Content-Type':  'application/json'
           },
-          body: JSON.stringify({
-            queueId,
-            routingTarget: { userId },
-            attributes:    { 'External Link': externalReference }
-          })
+          body: JSON.stringify({ queueId, routingTarget: { userId }, attributes: { 'External Link': externalReference } })
         });
         if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
         const chat = await resp.json();
 
-        // 2) Fetch conversation details to find participantId
+        // 2) Inspect participants
         const detailsResp = await fetch(
           `https://api.mypurecloud.ie/api/v2/conversations/chats/${chat.id}`, 
           { headers: { 'Authorization': `Bearer ${token}` } }
         );
         if (!detailsResp.ok) throw new Error(`${detailsResp.status} ${detailsResp.statusText}`);
         const details = await detailsResp.json();
-        // find the “agent” participant
-        const agentPart = details.participants.find(p => p.purpose === 'agent');
-        if (!agentPart) throw new Error('No agent participant to replace.');
+        console.debug('Participants:', details.participants);
 
-        // 3) Replace that participant with your selected user
+        // 3) Find the agent participant by type—not purpose
+        const agentPart = details.participants.find(p => p.participantType === 'agent');
+        if (!agentPart) throw new Error('🔎 No agent participant found to replace.');
+
+        // 4) Replace them
         const replaceResp = await fetch(
           `https://api.mypurecloud.ie/api/v2/conversations/chats/${chat.id}/participants/${agentPart.id}/replace`, 
           {
@@ -143,7 +148,7 @@
         );
         if (!replaceResp.ok) throw new Error(`${replaceResp.status} ${replaceResp.statusText}`);
 
-        statusEl.innerText = `💬 Chat ${chat.id} is live and assigned to user ${userId}!`;
+        statusEl.innerText = `💬 Chat ${chat.id} is live and now assigned to ${userId}!`;
       }
       catch (err) {
         console.error('Chat creation/assignment error:', err);
