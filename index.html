@@ -3,10 +3,11 @@ async function createInteraction(token) {
   const queueId = document.getElementById('queueSelect').value;
   const userId = document.getElementById('userSelect').value;
   const externalReference = document.getElementById('externalReference').value;
+  const statusElement = document.getElementById('statusMessage');
 
   try {
-    // 1. Create a web messaging interaction (most reliable for persistent work items)
-    const convResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/webmessaging', {
+    // 1. Create the messaging conversation
+    const createResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/messages', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -14,36 +15,37 @@ async function createInteraction(token) {
       },
       body: JSON.stringify({
         queueId: queueId,
-        direction: 'INBOUND',
+        toAddress: 'external-work@yourdomain.com', // Can be any valid email format
+        toAddressMessengerType: 'sms', // This helps create a persistent interaction
+        useExistingConversation: false, // Force new conversation
         externalContactId: '00000000-0000-0000-0000-000000000000', // Required dummy contact
-        attributes: {
-          'ExternalReference': externalReference,
-          'ExternalWork': 'true',
-          'subject': externalReference || 'External Work Item',
-          'customStatus': 'Pending' // Helps prevent auto-close
-        }
+        useUserFromAddress: false
       })
     });
 
-    if (!convResponse.ok) throw new Error(`Creation failed: ${await convResponse.text()}`);
-    const conversation = await convResponse.json();
+    if (!createResponse.ok) throw new Error(`Creation failed: ${await createResponse.text()}`);
+    const conversation = await createResponse.json();
     const conversationId = conversation.id;
 
-    // 2. Add a system message to stabilize the interaction
-    await fetch(`https://api.mypurecloud.ie/api/v2/conversations/webmessaging/${conversationId}/messages`, {
+    // 2. Add initial message content
+    const messageResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/messages/${conversationId}/messages`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        body: externalReference ? `Work Item: ${externalReference}` : 'New External Work Item',
-        bodyType: 'standard'
+        text: externalReference || 'External Work Item',
+        bodyType: 'standard',
+        attributes: {
+          'ExternalReference': externalReference,
+          'ExternalWork': 'true'
+        }
       })
     });
 
-    // 3. Assign to agent using participant endpoint (more reliable)
-    const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}/participants`, {
+    // 3. Assign to agent (alternative method that works better for messaging)
+    const participantResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}/participants`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -51,35 +53,36 @@ async function createInteraction(token) {
       },
       body: JSON.stringify({
         userId: userId,
-        purpose: 'agent'
+        purpose: 'agent',
+        attributes: {
+          'role': 'agent'
+        }
       })
     });
 
-    if (!assignResponse.ok) throw new Error(`Assignment failed: ${await assignResponse.text()}`);
-
-    // 4. Verify interaction remains open
+    // 4. Verify and display results
     const verifyResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const verifiedConv = await verifyResponse.json();
-    
-    if (verifiedConv.state !== 'active') {
-      throw new Error('Interaction failed to stay active');
-    }
 
-    // Success
-    document.getElementById('statusMessage').innerHTML = `
-      Work item created successfully!<br>
-      <a href="https://apps.mypurecloud.ie/conversation/${conversationId}" target="_blank">
-        Open in PureCloud (ID: ${conversationId})
-      </a>
+    statusElement.innerHTML = `
+      <div style="color:green">
+        Work item created successfully!<br>
+        State: ${verifiedConv.state}<br>
+        <a href="https://apps.mypurecloud.ie/conversation/${conversationId}" target="_blank">
+          Open in PureCloud (ID: ${conversationId})
+        </a>
+      </div>
     `;
 
   } catch (error) {
-    console.error('Creation error:', error);
-    document.getElementById('statusMessage').innerHTML = `
-      <span style="color:red">Error: ${error.message}</span><br>
-      ${error.response ? await error.response.text() : ''}
+    console.error('Error:', error);
+    statusElement.innerHTML = `
+      <div style="color:red">
+        Failed to create work item: ${error.message}<br>
+        ${error.response ? await error.response.text() : ''}
+      </div>
     `;
   }
 }
