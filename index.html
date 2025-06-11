@@ -96,6 +96,11 @@
       margin: 20px 0;
       font-weight: bold;
     }
+    #retryButton {
+      display: none;
+      margin: 10px auto;
+      padding: 8px 16px;
+    }
   </style>
 </head>
 <body>
@@ -106,6 +111,7 @@
   <h1>Dummy Interaction Creator</h1>
 
   <div id="authStatus" class="info">Authenticating with Genesys...</div>
+  <button id="retryButton" onclick="retryAuthentication()">Retry Authentication</button>
 
   <div id="appContent" style="display: none;">
     <div class="form-section">
@@ -139,9 +145,10 @@
 
   <script>
     // Configuration
-    const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-    const clientSecret = 'FX8Y1JOCT0N10mrUsMRbo459ULJEXZuy_k3ppxHrF2o'; // Note: This is not secure for client-side use!
+    const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
+    const clientSecret = 'FX8Y1JOCT0N10mrUsMRbo459ULJEXZuy_k3ppxHrF2o'; // Replace with your actual client secret
     const authUrl = 'https://login.mypurecloud.ie/oauth/token';
+    const apiBaseUrl = 'https://api.mypurecloud.ie/api/v2';
 
     // Global variables
     let token = '';
@@ -150,6 +157,7 @@
 
     // DOM elements
     const authStatus = document.getElementById('authStatus');
+    const retryButton = document.getElementById('retryButton');
     const appContent = document.getElementById('appContent');
     const createInteractionButton = document.getElementById('createInteractionButton');
     const queueSelect = document.getElementById('queueSelect');
@@ -159,46 +167,61 @@
     const statusMessage = document.getElementById('statusMessage');
     const loadingIndicator = document.getElementById('loadingIndicator');
 
+    // Initialize on load
+    window.addEventListener('load', initializeApp);
+
     // Event listeners
     createInteractionButton.addEventListener('click', createDummyInteraction);
 
-    // Initialize on load
-    window.addEventListener('load', async function() {
+    async function initializeApp() {
       showLoading(true);
+      authStatus.className = 'info';
+      authStatus.textContent = 'Authenticating with Genesys...';
+      retryButton.style.display = 'none';
       
       try {
         // Auto-authenticate
         await authenticate();
         
         // Initialize the app
-        await initializeApp();
+        await initializeData();
         
         authStatus.style.display = 'none';
+        retryButton.style.display = 'none';
         appContent.style.display = 'block';
         showStatus('Ready to create dummy interactions', 'success');
       } catch (error) {
+        console.error('Initialization error:', error);
         authStatus.textContent = `Authentication failed: ${error.message}`;
         authStatus.className = 'error';
-        console.error('Initialization error:', error);
+        retryButton.style.display = 'block';
       } finally {
         showLoading(false);
       }
-    });
+    }
+
+    async function retryAuthentication() {
+      await initializeApp();
+    }
 
     async function authenticate() {
       try {
         // Get OAuth token using client credentials
+        const authString = `${clientId}:${clientSecret}`;
+        const encodedAuth = btoa(authString);
+        
         const response = await fetch(authUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': 'Basic ' + btoa(`${clientId}:${clientSecret}`)
+            'Authorization': `Basic ${encodedAuth}`
           },
           body: 'grant_type=client_credentials'
         });
 
         if (!response.ok) {
-          throw new Error(`Authentication failed: ${response.status} ${response.statusText}`);
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
         const data = await response.json();
@@ -206,13 +229,12 @@
         authStatus.textContent = 'Authentication successful!';
         authStatus.className = 'success';
       } catch (error) {
-        authStatus.textContent = `Authentication failed: ${error.message}`;
-        authStatus.className = 'error';
-        throw error; // Re-throw for the calling function to handle
+        console.error('Authentication error:', error);
+        throw new Error(`Could not authenticate with Genesys: ${error.message}`);
       }
     }
 
-    async function initializeApp() {
+    async function initializeData() {
       try {
         // Fetch queues and users
         await Promise.all([
@@ -220,14 +242,14 @@
           fetchUsers()
         ]);
       } catch (error) {
-        showStatus(`Initialization error: ${error.message}`, 'error');
-        throw error; // Re-throw for the calling function to handle
+        console.error('Data initialization error:', error);
+        throw new Error(`Failed to initialize data: ${error.message}`);
       }
     }
 
     async function fetchQueues() {
       try {
-        const allQueues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
+        const allQueues = await fetchAllPages(`${apiBaseUrl}/routing/queues`);
         queues = allQueues;
         
         // Populate queue dropdown
@@ -239,15 +261,14 @@
           queueSelect.appendChild(option);
         });
       } catch (error) {
-        showStatus(`Error fetching queues: ${error.message}`, 'error');
         console.error('Queue fetch error:', error);
-        throw error;
+        throw new Error('Failed to load queues');
       }
     }
 
     async function fetchUsers() {
       try {
-        const allUsers = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token);
+        const allUsers = await fetchAllPages(`${apiBaseUrl}/users`);
         users = allUsers;
         
         // Populate user dropdown
@@ -259,20 +280,19 @@
           userSelect.appendChild(option);
         });
       } catch (error) {
-        showStatus(`Error fetching users: ${error.message}`, 'error');
         console.error('User fetch error:', error);
-        throw error;
+        throw new Error('Failed to load users');
       }
     }
 
-    async function fetchAllPages(url, token) {
+    async function fetchAllPages(endpoint) {
       let allResults = [];
       let pageNumber = 1;
       let pageCount = 1;
       const pageSize = 100;
 
       while (pageNumber <= pageCount) {
-        const response = await fetch(`${url}?pageNumber=${pageNumber}&pageSize=${pageSize}`, {
+        const response = await fetch(`${endpoint}?pageNumber=${pageNumber}&pageSize=${pageSize}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -288,7 +308,6 @@
         if (data.pageCount !== undefined) {
           pageCount = data.pageCount;
         } else if (data.pageCount === undefined && (data.entities || data.results).length < pageSize) {
-          // If no pageCount is returned and we got fewer items than requested, assume it's the last page
           pageCount = pageNumber;
         }
         
@@ -312,12 +331,18 @@
       showLoading(true);
 
       try {
+        // Get the division ID from the selected queue
+        const queue = queues.find(q => q.id === selectedQueueId);
+        if (!queue || !queue.division) {
+          throw new Error('Selected queue does not have a division');
+        }
+
         // Create a conversation (this will be our dummy interaction)
         const conversationData = {
           direction: "inbound",
           recordingState: "none",
           state: "alerting",
-          division: { id: queues.find(q => q.id === selectedQueueId).division.id },
+          division: { id: queue.division.id },
           queue: { id: selectedQueueId },
           participants: [
             {
@@ -333,7 +358,7 @@
           ...(labelValue && { labels: [labelValue] })
         };
 
-        const response = await fetch('https://api.mypurecloud.ie/api/v2/conversations', {
+        const response = await fetch(`${apiBaseUrl}/conversations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -344,7 +369,7 @@
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || `Failed to create interaction: ${response.status} ${response.statusText}`);
+          throw new Error(errorData.message || `Failed to create interaction: ${response.status}`);
         }
 
         const interactionResponse = await response.json();
@@ -353,8 +378,8 @@
         showStatus(`Dummy interaction created successfully! Conversation ID: ${conversationId}`, 'success');
         
       } catch (error) {
-        showStatus(`Error creating dummy interaction: ${error.message}`, 'error');
         console.error('Interaction creation error:', error);
+        showStatus(`Error creating dummy interaction: ${error.message}`, 'error');
       } finally {
         showLoading(false);
       }
