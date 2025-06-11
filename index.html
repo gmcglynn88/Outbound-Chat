@@ -3,11 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>External Work Item Creator</title>
-  <link href="https://fonts.googleapis.com/css2?family=Proxima+Nova&display=swap" rel="stylesheet">
+  <title>External Voice Call Creator</title>
   <style>
+    @font-face {
+      font-family: 'Aptos';
+      src: local('Aptos'), local('Aptos-Regular');
+      font-display: swap;
+    }
     body {
-      font-family: 'Proxima Nova', Arial, sans-serif;
+      font-family: 'Aptos', Arial, 'Segoe UI', sans-serif;
       margin: 20px;
       padding: 20px;
       line-height: 1.6;
@@ -31,6 +35,7 @@
       max-width: 350px;
       border: 1px solid #ddd;
       border-radius: 4px;
+      font-family: inherit;
     }
     button {
       background-color: #2e86de;
@@ -76,7 +81,7 @@
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
 
-  <h1>External Work Item Creator</h1>
+  <h1>External Voice Call Creator</h1>
 
   <label for="queueSelect">Select Queue:</label>
   <select id="queueSelect"></select>
@@ -84,19 +89,24 @@
   <label for="userSelect">Select Agent:</label>
   <select id="userSelect"></select>
 
-  <label for="externalReference">Work Item Reference:</label>
-  <input type="text" id="externalReference" placeholder="Enter reference (optional)">
+  <label for="ani">Caller Number (ANI):</label>
+  <input type="text" id="ani" placeholder="e.g. +441234567890" required>
 
-  <button id="createInteractionBtn">Create Work Item</button>
+  <label for="dnis">Recipient Number (DNIS):</label>
+  <input type="text" id="dnis" placeholder="e.g. +449876543210" required>
+
+  <label for="externalTag">External Tag:</label>
+  <input type="text" id="externalTag" placeholder="Enter tag for this conversation (optional)">
+
+  <button id="createCallBtn">Create Voice Call</button>
 
   <div id="statusMessage"></div>
 
   <script>
     const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
     const redirectUri = 'https://gmcglynn88.github.io/ExternalWorkCreation/';
-    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const oauthUrl = `https://login.euw2.pure.cloud/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
-    // Initialize app when DOM loads
     document.addEventListener('DOMContentLoaded', () => {
       const hash = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
@@ -111,18 +121,18 @@
 
     function initializeApp(token) {
       populateDropdowns(token);
-      
-      document.getElementById('createInteractionBtn').addEventListener('click', () => {
-        createInteraction(token);
+
+      document.getElementById('createCallBtn').addEventListener('click', () => {
+        createVoiceCall(token);
       });
     }
 
     async function populateDropdowns(token) {
       try {
-        // Fetch queues and users in parallel
+        // Get all queues and users in parallel
         const [queues, users] = await Promise.all([
-          fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token),
-          fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token)
+          fetchAllPages('https://api.euw2.pure.cloud/api/v2/routing/queues', token),
+          fetchAllPages('https://api.euw2.pure.cloud/api/v2/users', token)
         ]);
 
         const queueSelect = document.getElementById('queueSelect');
@@ -140,66 +150,56 @@
           option.text = user.name;
           userSelect.appendChild(option);
         });
-
       } catch (error) {
         showStatus(`Error loading data: ${error.message}`, 'error');
         console.error('Dropdown error:', error);
       }
     }
 
-    async function createInteraction(token) {
+    async function createVoiceCall(token) {
       const queueId = document.getElementById('queueSelect').value;
       const userId = document.getElementById('userSelect').value;
-      const externalReference = document.getElementById('externalReference').value;
-      const statusElement = document.getElementById('statusMessage');
-      
-      showStatus('Creating work item...', 'info');
+      const ani = document.getElementById('ani').value.trim();
+      const dnis = document.getElementById('dnis').value.trim();
+      const externalTag = document.getElementById('externalTag').value.trim();
+
+      if (!queueId || !userId || !ani || !dnis) {
+        showStatus('Please fill in all required fields!', 'error');
+        return;
+      }
+
+      showStatus('Creating voice call...', 'info');
+      document.getElementById('createCallBtn').disabled = true;
 
       try {
-        // 1. Create messaging conversation
-        const createResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/messages', {
+        // 1. Create the voice conversation (call) with queue and externalTag
+        const createBody = {
+          queueId: queueId,
+          externalTag: externalTag || undefined,
+          callers: [
+            { phoneNumber: ani }
+          ],
+          callees: [
+            { phoneNumber: dnis }
+          ],
+          direction: "outbound"
+        };
+
+        const createResponse = await fetch('https://api.euw2.pure.cloud/api/v2/conversations/calls', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            queueId: queueId,
-            toAddress: 'workitem@system.local',
-            toAddressMessengerType: 'email',
-            useExistingConversation: false,
-            externalContactId: '00000000-0000-0000-0000-000000000000',
-            routingTemplate: {
-              queueId: queueId,
-              priority: 100
-            },
-            attributes: {
-              'ExternalReference': externalReference,
-              'ExternalWork': 'true',
-              'subject': externalReference || 'External Work Item'
-            }
-          })
+          body: JSON.stringify(createBody)
         });
 
         if (!createResponse.ok) throw await createResponse.json();
         const conversation = await createResponse.json();
         const conversationId = conversation.id;
 
-        // 2. Add initial message
-        await fetch(`https://api.mypurecloud.ie/api/v2/conversations/messages/${conversationId}/messages`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            text: externalReference || 'New External Work Item',
-            bodyType: 'standard'
-          })
-        });
-
-        // 3. Assign to agent
-        await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}/participants`, {
+        // 2. Assign to agent (add participant)
+        const assignResponse = await fetch(`https://api.euw2.pure.cloud/api/v2/conversations/calls/${conversationId}/participants`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -211,32 +211,33 @@
           })
         });
 
-        // 4. Verify creation
-        const verifyResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const verifiedConv = await verifyResponse.json();
+        if (!assignResponse.ok) throw await assignResponse.json();
 
+        // 3. Success!
         showStatus(`
-          <strong>✓ Work item created successfully!</strong>
+          <strong>✓ Voice call created and assigned successfully!</strong>
           <div style="margin-top:10px">
-            <a href="https://apps.mypurecloud.ie/conversation/${conversationId}" target="_blank">
+            <a href="https://apps.euw2.pure.cloud/directory/#/engage/conversations/${conversationId}" target="_blank">
               Open in Agent Workspace
             </a>
           </div>
           <div style="margin-top:5px;font-size:0.9em">
-            ID: ${conversationId} | State: ${verifiedConv.state}
+            ID: ${conversationId}
           </div>
         `, 'success');
+        document.getElementById('ani').value = '';
+        document.getElementById('dnis').value = '';
+        document.getElementById('externalTag').value = '';
 
       } catch (error) {
         const errorMsg = error.message || JSON.stringify(error);
         showStatus(`Error: ${errorMsg}`, 'error');
-        console.error('Creation error:', error);
+        console.error('Call creation error:', error);
+      } finally {
+        document.getElementById('createCallBtn').disabled = false;
       }
     }
 
-    // Helper functions
     async function fetchAllPages(url, token) {
       let allItems = [];
       let pageNumber = 1;
@@ -247,8 +248,8 @@
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        allItems = allItems.concat(data.entities);
-        pageCount = data.pageCount;
+        allItems = allItems.concat(Array.isArray(data.entities) ? data.entities : []);
+        pageCount = data.pageCount || 1;
         pageNumber++;
       }
 
