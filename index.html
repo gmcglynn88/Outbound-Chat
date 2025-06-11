@@ -33,6 +33,10 @@
       margin-top: 20px;
       color: green;
     }
+    #interactionLink {
+      margin-top: 10px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -54,6 +58,7 @@
   <button id="createInteractionBtn">Create Proxy Interaction</button>
 
   <div id="statusMessage"></div>
+  <a id="interactionLink" href="#" target="_blank">View Interaction in PureCloud</a>
 
   <script>
     const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
@@ -139,8 +144,11 @@
       const queueId = document.getElementById('queueSelect').value;
       const userId = document.getElementById('userSelect').value;
       const externalReference = document.getElementById('externalReference').value;
+      const statusMessage = document.getElementById('statusMessage');
+      const interactionLink = document.getElementById('interactionLink');
 
       try {
+        // Create the email interaction
         const interactionResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
           method: 'POST',
           headers: {
@@ -152,7 +160,10 @@
             provider: 'QualityForm',
             direction: 'INBOUND',
             fromName: 'External Work',
-            attributes: { 'External Link': externalReference }
+            attributes: { 
+              'External Link': externalReference,
+              'External Work': 'true'  // Adding this attribute for easy filtering
+            }
           })
         });
 
@@ -163,15 +174,19 @@
         const interaction = await interactionResponse.json();
         const conversationId = interaction.id;
 
+        // Get conversation details to find the participant ID
         const conversationDetailsResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        
         if (!conversationDetailsResponse.ok) {
-          throw new Error(`Error fetching conversation details: ${conversationDetailsResponse.status} ${conversationDetails.statusText}`);
+          throw new Error(`Error fetching conversation details: ${conversationDetailsResponse.status} ${conversationDetailsResponse.statusText}`);
         }
+        
         const conversationDetails = await conversationDetailsResponse.json();
         const participantId = conversationDetails.participants[1].id;
 
+        // Assign the interaction to the selected user
         const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants/${participantId}/replace`, {
           method: 'POST',
           headers: {
@@ -185,12 +200,16 @@
           throw new Error(`Error assigning user: ${assignResponse.status} ${assignResponse.statusText}`);
         }
 
-        // Removed the disconnection part to keep the interaction active
-        document.getElementById('statusMessage').innerText = 'Interaction created and assigned successfully!';
+        // Show success message with link to the interaction
+        statusMessage.innerText = 'Interaction created and assigned successfully! It will remain active until the agent completes it.';
+        interactionLink.href = `https://apps.mypurecloud.ie/conversation/${conversationId}`;
+        interactionLink.style.display = 'inline-block';
+        interactionLink.innerText = `Open Interaction (ID: ${conversationId})`;
 
       } catch (error) {
         console.error('Error during interaction creation:', error);
-        document.getElementById('statusMessage').innerText = `Error: ${error.message}`;
+        statusMessage.innerText = `Error: ${error.message}`;
+        statusMessage.style.color = 'red';
       }
     }
   </script>
