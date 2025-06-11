@@ -91,21 +91,10 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    #authContainer {
+    #authStatus {
       text-align: center;
       margin: 20px 0;
-    }
-    #authButton {
-      background-color: #2e86de;
-      color: white;
-      padding: 12px 24px;
-      font-size: 16px;
-      border-radius: 4px;
-      text-decoration: none;
-      display: inline-block;
-    }
-    #authButton:hover {
-      background-color: #1e6ec4;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -116,9 +105,7 @@
 
   <h1>Dummy Interaction Creator</h1>
 
-  <div id="authContainer">
-    <a id="authButton" href="#">Login to Genesys</a>
-  </div>
+  <div id="authStatus" class="info">Authenticating with Genesys...</div>
 
   <div id="appContent" style="display: none;">
     <div class="form-section">
@@ -151,10 +138,10 @@
   </div>
 
   <script>
-    // OAuth Configuration
+    // Configuration
     const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-    const redirectUri = 'https://gmcglynn88.github.io/Outbound-Chat/';
-    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const clientSecret = 'FX8Y1JOCT0N10mrUsMRbo459ULJEXZuy_k3ppxHrF2o'; // Note: This is not secure for client-side use!
+    const authUrl = 'https://login.mypurecloud.ie/oauth/token';
 
     // Global variables
     let token = '';
@@ -162,8 +149,7 @@
     let users = [];
 
     // DOM elements
-    const authButton = document.getElementById('authButton');
-    const authContainer = document.getElementById('authContainer');
+    const authStatus = document.getElementById('authStatus');
     const appContent = document.getElementById('appContent');
     const createInteractionButton = document.getElementById('createInteractionButton');
     const queueSelect = document.getElementById('queueSelect');
@@ -174,51 +160,68 @@
     const loadingIndicator = document.getElementById('loadingIndicator');
 
     // Event listeners
-    authButton.addEventListener('click', handleAuthClick);
     createInteractionButton.addEventListener('click', createDummyInteraction);
 
-    // Check for OAuth token in URL fragment
-    window.addEventListener('load', function() {
-      const hash = window.location.hash.substr(1);
-      const result = hash.split('&').reduce(function(res, item) {
-        const parts = item.split('=');
-        res[parts[0]] = parts[1];
-        return res;
-      }, {});
-
-      if (result.access_token) {
-        token = result.access_token;
-        authContainer.style.display = 'none';
-        appContent.style.display = 'block';
+    // Initialize on load
+    window.addEventListener('load', async function() {
+      showLoading(true);
+      
+      try {
+        // Auto-authenticate
+        await authenticate();
         
         // Initialize the app
-        initializeApp();
-      } else {
-        authButton.href = oauthUrl;
+        await initializeApp();
+        
+        authStatus.style.display = 'none';
+        appContent.style.display = 'block';
+        showStatus('Ready to create dummy interactions', 'success');
+      } catch (error) {
+        authStatus.textContent = `Authentication failed: ${error.message}`;
+        authStatus.className = 'error';
+        console.error('Initialization error:', error);
+      } finally {
+        showLoading(false);
       }
     });
 
-    function handleAuthClick(e) {
-      e.preventDefault();
-      window.location.href = oauthUrl;
+    async function authenticate() {
+      try {
+        // Get OAuth token using client credentials
+        const response = await fetch(authUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': 'Basic ' + btoa(`${clientId}:${clientSecret}`)
+          },
+          body: 'grant_type=client_credentials'
+        });
+
+        if (!response.ok) {
+          throw new Error(`Authentication failed: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        token = data.access_token;
+        authStatus.textContent = 'Authentication successful!';
+        authStatus.className = 'success';
+      } catch (error) {
+        authStatus.textContent = `Authentication failed: ${error.message}`;
+        authStatus.className = 'error';
+        throw error; // Re-throw for the calling function to handle
+      }
     }
 
     async function initializeApp() {
-      showLoading(true);
-      
       try {
         // Fetch queues and users
         await Promise.all([
           fetchQueues(),
           fetchUsers()
         ]);
-
-        showStatus('Ready to create dummy interactions', 'success');
       } catch (error) {
         showStatus(`Initialization error: ${error.message}`, 'error');
-        console.error('Initialization error:', error);
-      } finally {
-        showLoading(false);
+        throw error; // Re-throw for the calling function to handle
       }
     }
 
@@ -238,6 +241,7 @@
       } catch (error) {
         showStatus(`Error fetching queues: ${error.message}`, 'error');
         console.error('Queue fetch error:', error);
+        throw error;
       }
     }
 
@@ -257,6 +261,7 @@
       } catch (error) {
         showStatus(`Error fetching users: ${error.message}`, 'error');
         console.error('User fetch error:', error);
+        throw error;
       }
     }
 
