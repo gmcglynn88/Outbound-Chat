@@ -97,7 +97,10 @@ document.getElementById('create-btn').onclick = async () => {
         provider: 'QualityForm',
         direction: 'INBOUND',
         fromName: 'External Work',
-        attributes: { 'External Link': externalRef }
+        attributes: { 'External Link': externalRef },
+        toAddress: "dummy@no-reply.com",
+        subject: "External Dummy Work",
+        textBody: "Please complete this external work via the provided link."
     };
 
     document.getElementById('result').innerHTML = "Creating interaction...";
