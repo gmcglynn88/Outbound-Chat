@@ -37,6 +37,9 @@
       margin-top: 10px;
       display: none;
     }
+    .error {
+      color: red;
+    }
   </style>
 </head>
 <body>
@@ -110,6 +113,7 @@
       } catch (error) {
         console.error('Error populating dropdowns:', error);
         document.getElementById('statusMessage').innerText = `Error loading data: ${error.message}`;
+        document.getElementById('statusMessage').className = 'error';
       }
     }
 
@@ -147,9 +151,14 @@
       const statusMessage = document.getElementById('statusMessage');
       const interactionLink = document.getElementById('interactionLink');
 
+      // Reset status
+      statusMessage.innerText = '';
+      statusMessage.className = '';
+      interactionLink.style.display = 'none';
+
       try {
-        // Create the email interaction
-        const interactionResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
+        // 1. Create a conversation (chat type tends to stay open better)
+        const conversationResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/chats', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -157,24 +166,30 @@
           },
           body: JSON.stringify({
             queueId: queueId,
-            provider: 'QualityForm',
             direction: 'INBOUND',
-            fromName: 'External Work',
-            attributes: { 
-              'External Link': externalReference,
-              'External Work': 'true'  // Adding this attribute for easy filtering
+            participants: [
+              {
+                name: 'External Work',
+                address: 'external@work.com',
+                externalContactId: '00000000-0000-0000-0000-000000000000'
+              }
+            ],
+            attributes: {
+              'ExternalReference': externalReference,
+              'ExternalWork': 'true',
+              'subject': externalReference || 'External Work Item'
             }
           })
         });
 
-        if (!interactionResponse.ok) {
-          throw new Error(`Error creating interaction: ${interactionResponse.status} ${interactionResponse.statusText}`);
+        if (!conversationResponse.ok) {
+          throw new Error(`Error creating conversation: ${conversationResponse.status} ${conversationResponse.statusText}`);
         }
 
-        const interaction = await interactionResponse.json();
-        const conversationId = interaction.id;
+        const conversation = await conversationResponse.json();
+        const conversationId = conversation.id;
 
-        // Get conversation details to find the participant ID
+        // 2. Get the participant ID
         const conversationDetailsResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -184,10 +199,10 @@
         }
         
         const conversationDetails = await conversationDetailsResponse.json();
-        const participantId = conversationDetails.participants[1].id;
+        const participantId = conversationDetails.participants[0].id;
 
-        // Assign the interaction to the selected user
-        const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants/${participantId}/replace`, {
+        // 3. Assign to the selected user
+        const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/chats/${conversationId}/participants/${participantId}/replace`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -200,6 +215,19 @@
           throw new Error(`Error assigning user: ${assignResponse.status} ${assignResponse.statusText}`);
         }
 
+        // 4. Add a message to the chat to make it more visible
+        const messageResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/chats/${conversationId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            body: externalReference ? `External work item created. Reference: ${externalReference}` : 'External work item created',
+            bodyType: 'standard'
+          })
+        });
+
         // Show success message with link to the interaction
         statusMessage.innerText = 'Interaction created and assigned successfully! It will remain active until the agent completes it.';
         interactionLink.href = `https://apps.mypurecloud.ie/conversation/${conversationId}`;
@@ -209,7 +237,7 @@
       } catch (error) {
         console.error('Error during interaction creation:', error);
         statusMessage.innerText = `Error: ${error.message}`;
-        statusMessage.style.color = 'red';
+        statusMessage.className = 'error';
       }
     }
   </script>
