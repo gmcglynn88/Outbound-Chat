@@ -7,8 +7,7 @@
         body { font-family: Arial, sans-serif; padding: 2rem; max-width: 480px; margin: auto; }
         label { display: block; margin-top: 1rem; }
         select, input, button { width: 100%; padding: 0.5rem; margin-top: 0.5rem; }
-        button { margin-top: 2rem; background: #0072ce; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        #result { margin-top: 2rem; font-size: 1.1em; }
+        button { margin-top: 2rem; background: #0072ce; color: white; border: none; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -47,12 +46,8 @@ window.onload = async () => {
         document.getElementById('main-form').style.display = 'block';
 
         // Load dropdown data
-        try {
-            await loadQueues();
-            await loadUsers();
-        } catch (e) {
-            document.getElementById('result').innerHTML = `<b style="color:red;">API error:</b> ${e.message}`;
-        }
+        await loadQueues();
+        await loadUsers();
     }
 };
 
@@ -84,7 +79,7 @@ async function loadUsers() {
     const users = await fetchAll('https://api.mypurecloud.ie/api/v2/users');
     const select = document.getElementById('user-select');
     select.innerHTML = users.map(u =>
-        `<option value="${u.id}">${u.name}</option>`
+        `<option value="${u.id}">${u.name} (${u.email})</option>`
     ).join('');
 }
 
@@ -98,15 +93,10 @@ document.getElementById('create-btn').onclick = async () => {
         direction: 'INBOUND',
         fromName: 'External Work',
         attributes: { 'External Link': externalRef },
-        toAddress: "dummy@no-reply.com",
-        subject: "External Dummy Work",
-        textBody: "Please complete this external work via the provided link."
+        // You *could* assign to userId using participant info, but for a dummy, keep it clean.
     };
 
-    document.getElementById('result').innerHTML = "Creating interaction...";
-
     try {
-        // Step 1: Create the conversation
         const res = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
             method: 'POST',
             headers: {
@@ -117,41 +107,8 @@ document.getElementById('create-btn').onclick = async () => {
         });
         if (!res.ok) throw new Error('Create failed: ' + res.status);
         const data = await res.json();
-        const conversationId = data.id;
-
-        // Step 2: Get all participants for the conversation
-        const convoRes = await fetch(
-            `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}`,
-            { headers: { 'Authorization': `Bearer ${accessToken}` } }
-        );
-        const convoData = await convoRes.json();
-
-        // Find the participant to assign (purpose: "acd")
-        const acdParticipant = (convoData.participants || []).find(
-            p => p.purpose === "acd"
-        );
-        if (!acdParticipant) throw new Error("Could not find ACD participant to assign");
-        const participantId = acdParticipant.id;
-
-        // Step 3: PATCH to assign the agent
-        const patchBody = [
-            { op: "replace", path: "/userId", value: userId }
-        ];
-        const patchRes = await fetch(
-            `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants/${participantId}`,
-            {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(patchBody)
-            }
-        );
-        if (!patchRes.ok) throw new Error("Assignment failed: " + patchRes.status);
-
         document.getElementById('result').innerHTML =
-            `<b>Success!</b> Assigned to agent.<br>Conversation ID: <code>${conversationId}</code>`;
+            `<b>Success!</b> Conversation ID: ${data.id}`;
     } catch (err) {
         document.getElementById('result').innerHTML =
             `<b style="color:red;">Error:</b> ${err.message}`;
