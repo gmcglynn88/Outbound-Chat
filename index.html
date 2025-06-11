@@ -105,7 +105,7 @@
   <script>
     const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
     const redirectUri = 'https://gmcglynn88.github.io/ExternalWorkCreation/';
-    const oauthUrl = `https://login.euw2.pure.cloud/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
     document.addEventListener('DOMContentLoaded', () => {
       const hash = window.location.hash.substring(1);
@@ -131,8 +131,8 @@
       try {
         // Get all queues and users in parallel
         const [queues, users] = await Promise.all([
-          fetchAllPages('https://api.euw2.pure.cloud/api/v2/routing/queues', token),
-          fetchAllPages('https://api.euw2.pure.cloud/api/v2/users', token)
+          fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token),
+          fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token)
         ]);
 
         const queueSelect = document.getElementById('queueSelect');
@@ -185,7 +185,7 @@
           direction: "outbound"
         };
 
-        const createResponse = await fetch('https://api.euw2.pure.cloud/api/v2/conversations/calls', {
+        const createResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/calls', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -199,7 +199,7 @@
         const conversationId = conversation.id;
 
         // 2. Assign to agent (add participant)
-        const assignResponse = await fetch(`https://api.euw2.pure.cloud/api/v2/conversations/calls/${conversationId}/participants`, {
+        const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/calls/${conversationId}/participants`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -217,7 +217,7 @@
         showStatus(`
           <strong>✓ Voice call created and assigned successfully!</strong>
           <div style="margin-top:10px">
-            <a href="https://apps.euw2.pure.cloud/directory/#/engage/conversations/${conversationId}" target="_blank">
+            <a href="https://apps.mypurecloud.ie/directory/#/engage/conversations/${conversationId}" target="_blank">
               Open in Agent Workspace
             </a>
           </div>
