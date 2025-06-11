@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>External Voice Call Creator</title>
+  <title>Dummy Interaction Creator</title>
   <style>
     @font-face {
       font-family: 'Aptos';
@@ -28,7 +28,7 @@
       display: block;
       font-weight: bold;
     }
-    select, input, button {
+    select, input, button, textarea {
       margin-top: 8px;
       padding: 10px;
       width: 100%;
@@ -67,21 +67,11 @@
       color: #383d41;
       border: 1px solid #d6d8db;
     }
-    a {
-      color: #2e86de;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
     .form-section {
       margin-bottom: 20px;
       padding: 15px;
       border: 1px solid #eee;
       border-radius: 4px;
-    }
-    .form-section h2 {
-      margin-top: 0;
     }
     #loadingIndicator {
       display: none;
@@ -108,7 +98,7 @@
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
 
-  <h1>External Voice Call Creator</h1>
+  <h1>Dummy Interaction Creator</h1>
 
   <div class="form-section">
     <h2>Authentication</h2>
@@ -122,7 +112,7 @@
   </div>
 
   <div class="form-section">
-    <h2>Call Details</h2>
+    <h2>Interaction Details</h2>
     <label for="queueSelect">Select Queue:</label>
     <select id="queueSelect" disabled>
       <option value="">-- Please authenticate first --</option>
@@ -133,19 +123,13 @@
       <option value="">-- Please authenticate first --</option>
     </select>
 
-    <label for="phoneNumber">Phone Number:</label>
-    <input type="text" id="phoneNumber" placeholder="Enter phone number to call" disabled>
+    <label for="interactionLabel">Interaction Label (optional):</label>
+    <input type="text" id="interactionLabel" placeholder="Enter label for interaction" disabled>
 
-    <label for="callerId">Caller ID (optional):</label>
-    <input type="text" id="callerId" placeholder="Enter caller ID number" disabled>
+    <label for="interactionNote">Notes (optional):</label>
+    <textarea id="interactionNote" placeholder="Enter any notes for the interaction" rows="3" disabled></textarea>
 
-    <label for="callerIdName">Caller ID Name (optional):</label>
-    <input type="text" id="callerIdName" placeholder="Enter caller ID name" disabled>
-
-    <label for="priority">Priority (optional):</label>
-    <input type="number" id="priority" min="1" max="100" placeholder="Enter priority (1-100)" disabled>
-
-    <button id="createCallButton" disabled>Create Call</button>
+    <button id="createInteractionButton" disabled>Create Dummy Interaction</button>
   </div>
 
   <div id="loadingIndicator">
@@ -163,19 +147,17 @@
 
     // DOM elements
     const authButton = document.getElementById('authButton');
-    const createCallButton = document.getElementById('createCallButton');
+    const createInteractionButton = document.getElementById('createInteractionButton');
     const queueSelect = document.getElementById('queueSelect');
     const userSelect = document.getElementById('userSelect');
-    const phoneNumber = document.getElementById('phoneNumber');
-    const callerId = document.getElementById('callerId');
-    const callerIdName = document.getElementById('callerIdName');
-    const priority = document.getElementById('priority');
+    const interactionLabel = document.getElementById('interactionLabel');
+    const interactionNote = document.getElementById('interactionNote');
     const statusMessage = document.getElementById('statusMessage');
     const loadingIndicator = document.getElementById('loadingIndicator');
 
     // Event listeners
     authButton.addEventListener('click', authenticate);
-    createCallButton.addEventListener('click', createCall);
+    createInteractionButton.addEventListener('click', createDummyInteraction);
 
     // Functions
     async function authenticate() {
@@ -216,13 +198,11 @@
         // Enable form elements
         queueSelect.disabled = false;
         userSelect.disabled = false;
-        phoneNumber.disabled = false;
-        callerId.disabled = false;
-        callerIdName.disabled = false;
-        priority.disabled = false;
-        createCallButton.disabled = false;
+        interactionLabel.disabled = false;
+        interactionNote.disabled = false;
+        createInteractionButton.disabled = false;
 
-        showStatus('Authentication successful! You can now create calls.', 'success');
+        showStatus('Authentication successful! You can now create dummy interactions.', 'success');
       } catch (error) {
         showStatus(`Error: ${error.message}`, 'error');
         console.error('Authentication error:', error);
@@ -302,59 +282,63 @@
       return allResults;
     }
 
-    async function createCall() {
+    async function createDummyInteraction() {
       const selectedQueueId = queueSelect.value;
       const selectedUserId = userSelect.value;
-      const phoneNumberValue = phoneNumber.value.trim();
-      const callerIdValue = callerId.value.trim();
-      const callerIdNameValue = callerIdName.value.trim();
-      const priorityValue = priority.value.trim();
+      const labelValue = interactionLabel.value.trim();
+      const noteValue = interactionNote.value.trim();
 
-      if (!selectedQueueId || !selectedUserId || !phoneNumberValue) {
-        showStatus('Please select a queue, agent, and enter a phone number', 'error');
+      if (!selectedQueueId || !selectedUserId) {
+        showStatus('Please select both a queue and an agent', 'error');
         return;
       }
 
       showLoading(true);
 
       try {
-        // Create the call
-        const callData = {
-          phoneNumber: phoneNumberValue,
-          callQueueId: selectedQueueId,
-          callUserId: selectedUserId,
-          callerId: callerIdValue || undefined,
-          callerIdName: callerIdNameValue || undefined,
-          priority: priorityValue ? parseInt(priorityValue) : undefined
+        // Create a conversation (this will be our dummy interaction)
+        const conversationData = {
+          direction: "inbound",
+          recordingState: "none",
+          state: "alerting",
+          division: { id: queues.find(q => q.id === selectedQueueId).division.id },
+          queue: { id: selectedQueueId },
+          participants: [
+            {
+              userId: selectedUserId,
+              purpose: "agent",
+              state: "alerting"
+            }
+          ],
+          attributes: {
+            dummyInteraction: "true",
+            ...(noteValue && { interactionNotes: noteValue })
+          },
+          ...(labelValue && { labels: [labelValue] })
         };
 
-        // Remove undefined values
-        Object.keys(callData).forEach(key => callData[key] === undefined && delete callData[key]);
-
-        const response = await fetch('https://api.mypurecloud.ie/api/v2/conversations/calls', {
+        const response = await fetch('https://api.mypurecloud.ie/api/v2/conversations', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(callData)
+          body: JSON.stringify(conversationData)
         });
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || `Failed to create call: ${response.status} ${response.statusText}`);
+          throw new Error(errorData.message || `Failed to create interaction: ${response.status} ${response.statusText}`);
         }
 
-        const callResponse = await response.json();
-        const conversationId = callResponse.id;
+        const interactionResponse = await response.json();
+        const conversationId = interactionResponse.id;
 
-        showStatus(`Call created successfully! Conversation ID: ${conversationId}`, 'success');
+        showStatus(`Dummy interaction created successfully! Conversation ID: ${conversationId}`, 'success');
         
-        // Optionally, you could assign the call to the agent here if needed
-        // But the initial call creation should already do this based on callUserId
       } catch (error) {
-        showStatus(`Error creating call: ${error.message}`, 'error');
-        console.error('Call creation error:', error);
+        showStatus(`Error creating dummy interaction: ${error.message}`, 'error');
+        console.error('Interaction creation error:', error);
       } finally {
         showLoading(false);
       }
