@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>External Work Interaction</title>
+  <title>External Interaction Creation</title>
   <link href="https://fonts.googleapis.com/css2?family=Proxima+Nova&display=swap" rel="stylesheet">
   <style>
     body {
@@ -40,7 +40,7 @@
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
 
-  <h1>External Work Creation</h1>
+  <h1>External Interaction Creation</h1>
 
   <label for="queueSelect">Select Queue:</label>
   <select id="queueSelect"></select>
@@ -167,7 +167,7 @@
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!conversationDetailsResponse.ok) {
-          throw new Error(`Error fetching conversation details: ${conversationDetailsResponse.status} ${conversationDetailsResponse.statusText}`);
+          throw new Error(`Error fetching conversation details: ${conversationDetailsResponse.status} ${conversationDetails.statusText}`);
         }
         const conversationDetails = await conversationDetailsResponse.json();
         const participantId = conversationDetails.participants[1].id;
