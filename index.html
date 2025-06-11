@@ -129,7 +129,6 @@
 
     async function populateDropdowns(token) {
       try {
-        // Get all queues and users in parallel
         const [queues, users] = await Promise.all([
           fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token),
           fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token)
@@ -172,17 +171,25 @@
       document.getElementById('createCallBtn').disabled = true;
 
       try {
-        // 1. Create the voice conversation (call) with queue and externalTag
+        // Create the conversation with proper voice settings
         const createBody = {
           queueId: queueId,
           externalTag: externalTag || undefined,
-          callers: [
-            { phoneNumber: ani }
-          ],
-          callees: [
-            { phoneNumber: dnis }
-          ],
-          direction: "outbound"
+          callers: [{
+            phoneNumber: ani,
+            name: "External Caller"
+          }],
+          callees: [{
+            phoneNumber: dnis,
+            name: "Agent Destination"
+          }],
+          direction: "outbound",
+          autoAnswer: true,
+          initialState: {
+            audioMuted: false,
+            confined: false,
+            held: false
+          }
         };
 
         const createResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/calls', {
@@ -198,22 +205,29 @@
         const conversation = await createResponse.json();
         const conversationId = conversation.id;
 
-        // 2. Assign to agent (add participant)
+        // Assign to agent with explicit voice settings
+        const assignBody = {
+          userId: userId,
+          purpose: "agent",
+          mediaSettings: {
+            audio: {
+              enabled: true
+            }
+          },
+          skipPreview: true
+        };
+
         const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/calls/${conversationId}/participants`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            userId: userId,
-            purpose: 'agent'
-          })
+          body: JSON.stringify(assignBody)
         });
 
         if (!assignResponse.ok) throw await assignResponse.json();
 
-        // 3. Success!
         showStatus(`
           <strong>✓ Voice call created and assigned successfully!</strong>
           <div style="margin-top:10px">
@@ -225,6 +239,7 @@
             ID: ${conversationId}
           </div>
         `, 'success');
+        
         document.getElementById('ani').value = '';
         document.getElementById('dnis').value = '';
         document.getElementById('externalTag').value = '';
