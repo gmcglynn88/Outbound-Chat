@@ -12,6 +12,7 @@
     label { display:block; margin-top:10px; font-weight:bold }
     select, input, button { width:100%; max-width:300px; padding:8px; margin-top:5px }
     #statusMessage { margin-top:20px; font-style:italic; color:#2a7f62 }
+    .required:after { content:" *"; color:red }
   </style>
 </head>
 <body>
@@ -21,19 +22,31 @@
 
   <h1>External Work Contact</h1>
 
-  <label for="queueSelect">Select Queue:</label>
-  <select id="queueSelect"></select>
+  <label for="queueSelect" class="required">Select Queue:</label>
+  <select id="queueSelect" required></select>
 
-  <label for="userSelect">Select Agent:</label>
-  <select id="userSelect"></select>
+  <label for="userSelect" class="required">Select Agent:</label>
+  <select id="userSelect" required></select>
 
-  <label for="emailAddress">Email Address (optional):</label>
+  <label for="contactMethod">Contact Method:</label>
+  <select id="contactMethod">
+    <option value="email">Email</option>
+    <option value="sms">SMS</option>
+  </select>
+
+  <label for="emailAddress">Email Address:</label>
   <input type="email" id="emailAddress" placeholder="e.g. user@example.com">
 
-  <label for="phoneNumber">Phone Number (optional):</label>
+  <label for="phoneNumber">Phone Number:</label>
   <input type="tel" id="phoneNumber" placeholder="e.g. +441234567890">
 
-  <button id="createInteractionBtn">Connect</button>
+  <label for="subject">Subject (for email):</label>
+  <input type="text" id="subject" placeholder="Subject line for email">
+
+  <label for="initialMessage">Initial Message:</label>
+  <textarea id="initialMessage" rows="3" style="width:100%; max-width:300px" placeholder="Optional initial message"></textarea>
+
+  <button id="createInteractionBtn">Create Outbound Interaction</button>
   <div id="statusMessage"></div>
 
   <script>
@@ -67,6 +80,20 @@
       const token  = params.get('access_token');
       if (!token) return window.location.replace(oauthUrl);
       initializeApp(token);
+      
+      // Show/hide fields based on contact method
+      document.getElementById('contactMethod').addEventListener('change', function() {
+        const method = this.value;
+        document.getElementById('emailAddress').style.display = method === 'email' ? 'block' : 'none';
+        document.querySelector('label[for="emailAddress"]').style.display = method === 'email' ? 'block' : 'none';
+        document.getElementById('phoneNumber').style.display = method === 'sms' ? 'block' : 'none';
+        document.querySelector('label[for="phoneNumber"]').style.display = method === 'sms' ? 'block' : 'none';
+        document.getElementById('subject').style.display = method === 'email' ? 'block' : 'none';
+        document.querySelector('label[for="subject"]').style.display = method === 'email' ? 'block' : 'none';
+      });
+      
+      // Trigger initial state
+      document.getElementById('contactMethod').dispatchEvent(new Event('change'));
     });
 
     function initializeApp(token) {
@@ -76,12 +103,25 @@
     }
 
     async function populateDropdowns(token) {
-      const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
-      const users  = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users',       token);
-      const qSel   = document.getElementById('queueSelect');
-      const uSel   = document.getElementById('userSelect');
-      queues.forEach(q => qSel.add(new Option(q.name, q.id)));
-      users .forEach(u => uSel.add(new Option(u.name, u.id)));
+      try {
+        const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
+        const users  = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users?expand=presence', token);
+        
+        const qSel = document.getElementById('queueSelect');
+        const uSel = document.getElementById('userSelect');
+        
+        // Sort queues alphabetically
+        queues.sort((a, b) => a.name.localeCompare(b.name));
+        queues.forEach(q => qSel.add(new Option(q.name, q.id)));
+        
+        // Sort users alphabetically and filter for available agents if needed
+        users.sort((a, b) => a.name.localeCompare(b.name));
+        users.forEach(u => uSel.add(new Option(u.name, u.id)));
+        
+      } catch (error) {
+        document.getElementById('statusMessage').innerText = `Error loading data: ${error.message}`;
+        console.error('Error populating dropdowns:', error);
+      }
     }
 
     async function fetchAllPages(url, token) {
@@ -100,22 +140,32 @@
     }
 
     async function connectExternal(token) {
-      const queueId   = document.getElementById('queueSelect').value;
-      const userId    = document.getElementById('userSelect').value;
-      const emailAddr = document.getElementById('emailAddress').value.trim();
-      const phoneNum  = document.getElementById('phoneNumber').value.trim();
-      const statusEl  = document.getElementById('statusMessage');
+      const queueId      = document.getElementById('queueSelect').value;
+      const userId       = document.getElementById('userSelect').value;
+      const contactMethod = document.getElementById('contactMethod').value;
+      const emailAddr    = document.getElementById('emailAddress').value.trim();
+      const phoneNum     = document.getElementById('phoneNumber').value.trim();
+      const subject      = document.getElementById('subject').value.trim();
+      const initialMessage = document.getElementById('initialMessage').value.trim();
+      const statusEl     = document.getElementById('statusMessage');
 
-      if (!emailAddr && !phoneNum) {
-        return statusEl.innerText = '⚠️ Please enter either an email address or phone number.';
+      // Validate inputs
+      if (contactMethod === 'email' && !emailAddr) {
+        return statusEl.innerText = '⚠️ Please enter an email address.';
+      }
+      if (contactMethod === 'sms' && !phoneNum) {
+        return statusEl.innerText = '⚠️ Please enter a phone number.';
+      }
+      if (!queueId || !userId) {
+        return statusEl.innerText = '⚠️ Please select both a queue and an agent.';
       }
 
-      statusEl.innerText = '🚀 Initiating…';
+      statusEl.innerText = '🚀 Creating outbound interaction...';
 
       try {
         let convo;
 
-        if (emailAddr) {
+        if (contactMethod === 'email') {
           // Email conversation
           const resp = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
             method: 'POST',
@@ -125,12 +175,20 @@
             },
             body: JSON.stringify({
               queueId,
-              toAddress:  emailAddr,
-              fromName:   'External Work',
-              attributes: {}
+              toAddress: emailAddr,
+              fromName: 'External Work',
+              subject: subject || 'Follow up',
+              direction: 'outbound',
+              attributes: {
+                source: 'external_work_tool',
+                interactionType: 'outbound_email'
+              }
             })
           });
-          if (!resp.ok) throw new Error(`Email API ${resp.status} ${resp.statusText}`);
+          if (!resp.ok) {
+            const error = await resp.json();
+            throw new Error(`Email API ${resp.status} ${resp.statusText}: ${error.message}`);
+          }
           convo = await resp.json();
         } else {
           // SMS conversation
@@ -143,16 +201,27 @@
             body: JSON.stringify({
               queueId,
               messagingSetting: { integrationId: messagingIntegrationId },
-              toAddress:        phoneNum,
+              toAddress: phoneNum,
               provider,
-              attributes:       {}
+              direction: 'outbound',
+              attributes: {
+                source: 'external_work_tool',
+                interactionType: 'outbound_sms'
+              },
+              initialMessage: initialMessage ? {
+                textBody: initialMessage,
+                isActive: true
+              } : undefined
             })
           });
-          if (!resp.ok) throw new Error(`Messaging API ${resp.status} ${resp.statusText}`);
+          if (!resp.ok) {
+            const error = await resp.json();
+            throw new Error(`Messaging API ${resp.status} ${resp.statusText}: ${error.message}`);
+          }
           convo = await resp.json();
         }
 
-        // Inject agent
+        // Add agent to the conversation
         const partUrl = convo.hasOwnProperty('fromAddress')
           ? `https://api.mypurecloud.ie/api/v2/conversations/emails/${convo.id}/participants`
           : `https://api.mypurecloud.ie/api/v2/conversations/messaging/conversations/${convo.id}/participants`;
@@ -163,15 +232,32 @@
             'Authorization': `Bearer ${token}`,
             'Content-Type':  'application/json'
           },
-          body: JSON.stringify({ userId, purpose: 'agent' })
+          body: JSON.stringify({ 
+            userId, 
+            purpose: 'agent',
+            attributes: {
+              assignedBy: 'external_work_tool'
+            }
+          })
         });
-        if (!partResp.ok) throw new Error(`Participant API ${partResp.status} ${partResp.statusText}`);
+        if (!partResp.ok) {
+          const error = await partResp.json();
+          throw new Error(`Participant API ${partResp.status} ${partResp.statusText}: ${error.message}`);
+        }
 
-        statusEl.innerText = `✅ Conversation ${convo.id} open and assigned to ${userId}!`;
+        statusEl.innerHTML = `✅ <strong>Outbound interaction created successfully!</strong><br>
+                             Conversation ID: ${convo.id}<br>
+                             Assigned to agent: ${document.getElementById('userSelect').selectedOptions[0].text}<br>
+                             <small>The interaction will appear in the agent's workspace.</small>`;
+        
+        // Optionally clear form for next interaction
+        // document.getElementById('emailAddress').value = '';
+        // document.getElementById('phoneNumber').value = '';
+        // document.getElementById('initialMessage').value = '';
       }
       catch (err) {
-        console.error(err);
-        statusEl.innerText = `😵 Oops: ${err.message}`;
+        console.error('Error creating interaction:', err);
+        statusEl.innerHTML = `❌ <strong>Failed to create interaction:</strong><br>${err.message}`;
       }
     }
   </script>
