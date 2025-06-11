@@ -3,59 +3,264 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dummy Interaction Creator</title>
-  <!-- [Previous styles remain the same] -->
+  <title>External Voice Call Creator</title>
+  <style>
+    @font-face {
+      font-family: 'Aptos';
+      src: local('Aptos'), local('Aptos-Regular');
+      font-display: swap;
+    }
+    body {
+      font-family: 'Aptos', Arial, 'Segoe UI', sans-serif;
+      margin: 20px;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    #logo-container {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    #logo {
+      width: 300px;
+    }
+    label {
+      margin-top: 15px;
+      display: block;
+      font-weight: bold;
+    }
+    select, input, button {
+      margin-top: 8px;
+      padding: 10px;
+      width: 100%;
+      max-width: 350px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: inherit;
+    }
+    button {
+      background-color: #2e86de;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:hover {
+      background-color: #1e6ec4;
+    }
+    #statusMessage {
+      margin-top: 25px;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .info {
+      background-color: #e2e3e5;
+      color: #383d41;
+      border: 1px solid #d6d8db;
+    }
+    a {
+      color: #2e86de;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
-  <!-- [Previous HTML structure remains the same] -->
+  <div id="logo-container">
+    <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
+  </div>
+
+  <h1>External Voice Call Creator</h1>
+
+  <label for="queueSelect">Select Queue:</label>
+  <select id="queueSelect"></select>
+
+  <label for="userSelect">Select Agent:</label>
+  <select id="userSelect"></select>
+
+  <label for="ani">Caller Number (ANI):</label>
+  <input type="text" id="ani" placeholder="e.g. +441234567890" required>
+
+  <label for="dnis">Recipient Number (DNIS):</label>
+  <input type="text" id="dnis" placeholder="e.g. +449876543210" required>
+
+  <label for="externalTag">External Tag:</label>
+  <input type="text" id="externalTag" placeholder="Enter tag for this conversation (optional)">
+
+  <button id="createCallBtn">Create Voice Call</button>
+
+  <div id="statusMessage"></div>
 
   <script>
-    // Configuration
-    const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-    const proxyUrl = 'https://cors-anywhere.herokuapp.com/'; // CORS proxy
-    const authUrl = `${proxyUrl}https://login.mypurecloud.ie/oauth/token`;
-    const apiBaseUrl = 'https://api.mypurecloud.ie/api/v2';
+    const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
+    const redirectUri = 'https://gmcglynn88.github.io/ExternalWorkCreation/';
+    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
-    // Global variables
-    let token = '';
-    let queues = [];
-    let users = [];
+    document.addEventListener('DOMContentLoaded', () => {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const token = params.get('access_token');
 
-    // [Previous DOM elements and event listeners remain the same]
+      if (!token) {
+        window.location.href = oauthUrl;
+      } else {
+        initializeApp(token);
+      }
+    });
 
-    async function authenticate() {
+    function initializeApp(token) {
+      populateDropdowns(token);
+
+      document.getElementById('createCallBtn').addEventListener('click', () => {
+        createVoiceCall(token);
+      });
+    }
+
+    async function populateDropdowns(token) {
       try {
-        // Get OAuth token using client credentials
-        const authString = `${clientId}:${clientSecret}`;
-        const encodedAuth = btoa(authString);
-        
-        const response = await fetch(authUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': `Basic ${encodedAuth}`,
-            'X-Requested-With': 'XMLHttpRequest' // Required by some CORS proxies
-          },
-          body: 'grant_type=client_credentials',
-          mode: 'cors' // Ensure CORS mode is enabled
+        // Get all queues and users in parallel
+        const [queues, users] = await Promise.all([
+          fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token),
+          fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token)
+        ]);
+
+        const queueSelect = document.getElementById('queueSelect');
+        queues.forEach(queue => {
+          const option = document.createElement('option');
+          option.value = queue.id;
+          option.text = queue.name;
+          queueSelect.appendChild(option);
         });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-
-        const data = await response.json();
-        token = data.access_token;
-        authStatus.textContent = 'Authentication successful!';
-        authStatus.className = 'success';
+        const userSelect = document.getElementById('userSelect');
+        users.forEach(user => {
+          const option = document.createElement('option');
+          option.value = user.id;
+          option.text = user.name;
+          userSelect.appendChild(option);
+        });
       } catch (error) {
-        console.error('Authentication error:', error);
-        throw new Error(`Could not authenticate with Genesys: ${error.message}`);
+        showStatus(`Error loading data: ${error.message}`, 'error');
+        console.error('Dropdown error:', error);
       }
     }
 
-    // [Rest of the code remains the same]
+    async function createVoiceCall(token) {
+      const queueId = document.getElementById('queueSelect').value;
+      const userId = document.getElementById('userSelect').value;
+      const ani = document.getElementById('ani').value.trim();
+      const dnis = document.getElementById('dnis').value.trim();
+      const externalTag = document.getElementById('externalTag').value.trim();
+
+      if (!queueId || !userId || !ani || !dnis) {
+        showStatus('Please fill in all required fields!', 'error');
+        return;
+      }
+
+      showStatus('Creating voice call...', 'info');
+      document.getElementById('createCallBtn').disabled = true;
+
+      try {
+        // 1. Create the voice conversation (call) with queue and externalTag
+        const createBody = {
+          queueId: queueId,
+          externalTag: externalTag || undefined,
+          callers: [
+            { phoneNumber: ani }
+          ],
+          callees: [
+            { phoneNumber: dnis }
+          ],
+          direction: "outbound"
+        };
+
+        const createResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/calls', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(createBody)
+        });
+
+        if (!createResponse.ok) throw await createResponse.json();
+        const conversation = await createResponse.json();
+        const conversationId = conversation.id;
+
+        // 2. Assign to agent (add participant)
+        const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/calls/${conversationId}/participants`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: userId,
+            purpose: 'agent'
+          })
+        });
+
+        if (!assignResponse.ok) throw await assignResponse.json();
+
+        // 3. Success!
+        showStatus(`
+          <strong>✓ Voice call created and assigned successfully!</strong>
+          <div style="margin-top:10px">
+            <a href="https://apps.mypurecloud.ie/directory/#/engage/conversations/${conversationId}" target="_blank">
+              Open in Agent Workspace
+            </a>
+          </div>
+          <div style="margin-top:5px;font-size:0.9em">
+            ID: ${conversationId}
+          </div>
+        `, 'success');
+        document.getElementById('ani').value = '';
+        document.getElementById('dnis').value = '';
+        document.getElementById('externalTag').value = '';
+
+      } catch (error) {
+        const errorMsg = error.message || JSON.stringify(error);
+        showStatus(`Error: ${errorMsg}`, 'error');
+        console.error('Call creation error:', error);
+      } finally {
+        document.getElementById('createCallBtn').disabled = false;
+      }
+    }
+
+    async function fetchAllPages(url, token) {
+      let allItems = [];
+      let pageNumber = 1;
+      let pageCount = 1;
+
+      while (pageNumber <= pageCount) {
+        const response = await fetch(`${url}?pageNumber=${pageNumber}&pageSize=100`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        allItems = allItems.concat(Array.isArray(data.entities) ? data.entities : []);
+        pageCount = data.pageCount || 1;
+        pageNumber++;
+      }
+
+      return allItems;
+    }
+
+    function showStatus(message, type) {
+      const element = document.getElementById('statusMessage');
+      element.innerHTML = message;
+      element.className = type;
+    }
   </script>
 </body>
 </html>
