@@ -15,6 +15,7 @@
       margin: 20px;
       padding: 20px;
       line-height: 1.6;
+      background: #f9fafc;
     }
     #logo-container {
       text-align: center;
@@ -22,6 +23,10 @@
     }
     #logo {
       width: 300px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 2.2rem;
     }
     label {
       margin-top: 15px;
@@ -36,6 +41,8 @@
       border: 1px solid #ddd;
       border-radius: 4px;
       font-family: inherit;
+      font-size: 1rem;
+      box-sizing: border-box;
     }
     button {
       background-color: #2e86de;
@@ -43,6 +50,7 @@
       font-weight: bold;
       cursor: pointer;
       margin-top: 20px;
+      transition: background 0.2s;
     }
     button:hover {
       background-color: #1e6ec4;
@@ -51,6 +59,7 @@
       margin-top: 25px;
       padding: 15px;
       border-radius: 4px;
+      max-width: 400px;
     }
     .success {
       background-color: #d4edda;
@@ -74,208 +83,156 @@
     a:hover {
       text-decoration: underline;
     }
+    .form-section {
+      margin: 0 auto;
+      max-width: 400px;
+    }
   </style>
 </head>
 <body>
   <div id="logo-container">
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
-
   <h1>External Voice Call Creator</h1>
 
-  <label for="queueSelect">Select Queue:</label>
-  <select id="queueSelect"></select>
+  <div class="form-section">
+    <label for="queueSelect">Select Queue:</label>
+    <select id="queueSelect"></select>
 
-  <label for="userSelect">Select Agent:</label>
-  <select id="userSelect"></select>
+    <label for="userSelect">Select Agent:</label>
+    <select id="userSelect"></select>
 
-  <label for="ani">Caller Number (ANI):</label>
-  <input type="text" id="ani" placeholder="e.g. +441234567890" required>
+    <label for="phoneNumber">Phone Number to Dial:</label>
+    <input type="text" id="phoneNumber" placeholder="+441234567890">
 
-  <label for="dnis">Recipient Number (DNIS):</label>
-  <input type="text" id="dnis" placeholder="e.g. +449876543210" required>
+    <label for="callerId">Caller ID (optional):</label>
+    <input type="text" id="callerId" placeholder="+441234567890">
 
-  <label for="externalTag">External Tag:</label>
-  <input type="text" id="externalTag" placeholder="Enter tag for this conversation (optional)">
+    <button id="createCallBtn">Create Call</button>
 
-  <button id="createCallBtn">Create Voice Call</button>
-
-  <div id="statusMessage"></div>
+    <div id="statusMessage"></div>
+  </div>
 
   <script>
-    const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
-    const redirectUri = 'https://gmcglynn88.github.io/ExternalWorkCreation/';
-    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    // Replace with your Genesys OAuth token for testing. DO NOT use client-side in production!
+    const token = "YOUR_ACCESS_TOKEN_HERE"; // <--- Swap this out!
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const token = params.get('access_token');
-
-      if (!token) {
-        window.location.href = oauthUrl;
-      } else {
-        initializeApp(token);
+    // Helper to fetch ALL paged results for a Genesys API endpoint
+    async function fetchAllPages(url, token) {
+      let results = [];
+      let page = 1, pageSize = 100, more = true;
+      while(more) {
+        const resp = await fetch(`${url}?pageSize=${pageSize}&pageNumber=${page}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error(`Failed to fetch: ${url}`);
+        const data = await resp.json();
+        // Entities (for queues) or users (for users endpoint)
+        if (data.entities) {
+          results = results.concat(data.entities);
+        } else if (data.users) {
+          results = results.concat(data.users);
+        } else {
+          throw new Error("Unexpected API structure");
+        }
+        more = (data.pageCount && page < data.pageCount) || (data.nextUri != null);
+        page++;
       }
-    });
-
-    function initializeApp(token) {
-      populateDropdowns(token);
-
-      document.getElementById('createCallBtn').addEventListener('click', () => {
-        createVoiceCall(token);
-      });
+      return results;
     }
 
-    async function populateDropdowns(token) {
+    // Populate the dropdowns with data
+    async function loadDropdowns() {
+      setStatus("Loading queues and agents...", "info");
       try {
         const [queues, users] = await Promise.all([
           fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token),
           fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token)
         ]);
 
-        const queueSelect = document.getElementById('queueSelect');
-        queues.forEach(queue => {
-          const option = document.createElement('option');
-          option.value = queue.id;
-          option.text = queue.name;
-          queueSelect.appendChild(option);
+        // Fill queues dropdown
+        const queueSelect = document.getElementById("queueSelect");
+        queueSelect.innerHTML = '<option value="">-- Select Queue --</option>';
+        queues.forEach(q => {
+          const opt = document.createElement("option");
+          opt.value = q.id;
+          opt.textContent = q.name;
+          queueSelect.appendChild(opt);
         });
 
-        const userSelect = document.getElementById('userSelect');
-        users.forEach(user => {
-          const option = document.createElement('option');
-          option.value = user.id;
-          option.text = user.name;
-          userSelect.appendChild(option);
+        // Fill agents dropdown (filter to active agents if you like)
+        const userSelect = document.getElementById("userSelect");
+        userSelect.innerHTML = '<option value="">-- Select Agent --</option>';
+        users.filter(u => u.state === "active").forEach(u => {
+          const opt = document.createElement("option");
+          opt.value = u.id;
+          opt.textContent = u.name;
+          userSelect.appendChild(opt);
         });
-      } catch (error) {
-        showStatus(`Error loading data: ${error.message}`, 'error');
-        console.error('Dropdown error:', error);
+
+        setStatus("Ready! Please fill in the details and click Create Call.", "success");
+      } catch (err) {
+        setStatus("Failed to load queues or agents: " + err.message, "error");
       }
     }
 
-    async function createVoiceCall(token) {
-      const queueId = document.getElementById('queueSelect').value;
-      const userId = document.getElementById('userSelect').value;
-      const ani = document.getElementById('ani').value.trim();
-      const dnis = document.getElementById('dnis').value.trim();
-      const externalTag = document.getElementById('externalTag').value.trim();
+    // Set the status box
+    function setStatus(msg, type="info") {
+      const box = document.getElementById("statusMessage");
+      box.textContent = msg;
+      box.className = type;
+    }
 
-      if (!queueId || !userId || !ani || !dnis) {
-        showStatus('Please fill in all required fields!', 'error');
-        return;
-      }
-
-      showStatus('Creating voice call...', 'info');
-      document.getElementById('createCallBtn').disabled = true;
-
+    // Create the call via Genesys API
+    async function createCall() {
+      setStatus("Creating call...", "info");
       try {
-        // Create the conversation with proper voice settings
-        const createBody = {
-          queueId: queueId,
-          externalTag: externalTag || undefined,
-          callers: [{
-            phoneNumber: ani,
-            name: "External Caller"
-          }],
-          callees: [{
-            phoneNumber: dnis,
-            name: "Agent Destination"
-          }],
-          direction: "outbound",
-          autoAnswer: true,
-          initialState: {
-            audioMuted: false,
-            confined: false,
-            held: false
-          }
+        const queueId = document.getElementById("queueSelect").value;
+        const userId = document.getElementById("userSelect").value;
+        const phoneNumber = document.getElementById("phoneNumber").value;
+        const callerId = document.getElementById("callerId").value;
+
+        // Minimal validation
+        if (!queueId || !userId || !phoneNumber) {
+          setStatus("Please select a queue, an agent, and enter a phone number.", "error");
+          return;
+        }
+
+        // Step 1: Create the call
+        const callBody = {
+          phoneNumber: phoneNumber,
+          callQueueId: queueId,
+          callUserId: userId,
+          callerId: callerId || undefined,
+          priority: 1,
+          attributes: { source: "ExternalCallDemo" }
         };
 
-        const createResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/calls', {
-          method: 'POST',
+        const resp = await fetch("https://api.mypurecloud.ie/api/v2/conversations/calls", {
+          method: "POST",
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
           },
-          body: JSON.stringify(createBody)
+          body: JSON.stringify(callBody)
         });
 
-        if (!createResponse.ok) throw await createResponse.json();
-        const conversation = await createResponse.json();
-        const conversationId = conversation.id;
+        if (!resp.ok) {
+          const errorText = await resp.text();
+          throw new Error("Failed to create call: " + errorText);
+        }
 
-        // Assign to agent with explicit voice settings
-        const assignBody = {
-          userId: userId,
-          purpose: "agent",
-          mediaSettings: {
-            audio: {
-              enabled: true
-            }
-          },
-          skipPreview: true
-        };
-
-        const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/calls/${conversationId}/participants`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(assignBody)
-        });
-
-        if (!assignResponse.ok) throw await assignResponse.json();
-
-        showStatus(`
-          <strong>✓ Voice call created and assigned successfully!</strong>
-          <div style="margin-top:10px">
-            <a href="https://apps.mypurecloud.ie/directory/#/engage/conversations/${conversationId}" target="_blank">
-              Open in Agent Workspace
-            </a>
-          </div>
-          <div style="margin-top:5px;font-size:0.9em">
-            ID: ${conversationId}
-          </div>
-        `, 'success');
-        
-        document.getElementById('ani').value = '';
-        document.getElementById('dnis').value = '';
-        document.getElementById('externalTag').value = '';
-
-      } catch (error) {
-        const errorMsg = error.message || JSON.stringify(error);
-        showStatus(`Error: ${errorMsg}`, 'error');
-        console.error('Call creation error:', error);
-      } finally {
-        document.getElementById('createCallBtn').disabled = false;
+        const data = await resp.json();
+        setStatus("Call created and assigned to agent! 🎉 Conversation ID: " + data.id, "success");
+      } catch (err) {
+        setStatus("Error: " + err.message, "error");
       }
     }
 
-    async function fetchAllPages(url, token) {
-      let allItems = [];
-      let pageNumber = 1;
-      let pageCount = 1;
+    document.getElementById("createCallBtn").onclick = createCall;
 
-      while (pageNumber <= pageCount) {
-        const response = await fetch(`${url}?pageNumber=${pageNumber}&pageSize=100`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        allItems = allItems.concat(Array.isArray(data.entities) ? data.entities : []);
-        pageCount = data.pageCount || 1;
-        pageNumber++;
-      }
-
-      return allItems;
-    }
-
-    function showStatus(message, type) {
-      const element = document.getElementById('statusMessage');
-      element.innerHTML = message;
-      element.className = type;
-    }
+    // Auto load the dropdowns on page load
+    loadDropdowns();
   </script>
 </body>
 </html>
