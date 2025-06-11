@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Outbound Voice Call</title>
+  <title>External Work Creation</title>
   <link href="https://fonts.googleapis.com/css2?family=Proxima+Nova&display=swap" rel="stylesheet">
   <style>
     body {
@@ -31,20 +31,7 @@
     }
     #statusMessage {
       margin-top: 20px;
-      padding: 10px;
-      border-radius: 4px;
-    }
-    .success {
-      background-color: #dff0d8;
-      color: #3c763d;
-    }
-    .error {
-      background-color: #f2dede;
-      color: #a94442;
-    }
-    .processing {
-      background-color: #d9edf7;
-      color: #31708f;
+      color: green;
     }
   </style>
 </head>
@@ -53,37 +40,26 @@
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
 
-  <h1>Outbound Voice Call</h1>
+  <h1>External Work Creation</h1>
 
-  <label for="queueSelect" class="required">Select Queue:</label>
-  <select id="queueSelect" required></select>
+  <label for="queueSelect">Select Queue:</label>
+  <select id="queueSelect"></select>
 
-  <label for="userSelect" class="required">Select Agent:</label>
-  <select id="userSelect" required></select>
+  <label for="userSelect">Select User:</label>
+  <select id="userSelect"></select>
 
-  <label for="phoneNumber" class="required">Phone Number:</label>
-  <input type="tel" id="phoneNumber" placeholder="e.g. +441234567890" required>
+  <label for="externalReference">External Reference:</label>
+  <input type="text" id="externalReference" placeholder="Enter external reference (optional)">
 
-  <label for="externalReference">External Reference (optional):</label>
-  <input type="text" id="externalReference" placeholder="Enter reference information">
-
-  <button id="createInteractionBtn">Initiate Outbound Call</button>
+  <button id="createInteractionBtn">Create Proxy Interaction</button>
 
   <div id="statusMessage"></div>
 
   <script>
-    // Configuration
     const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
     const redirectUri = 'https://gmcglynn88.github.io/ExternalWorkCreation/';
     const responseType = 'token';
-    const scopes = [
-      'conversation.call.create',
-      'conversation.participants.create',
-      'routing.queues.read',
-      'directory.users.read'
-    ].join(' ');
-    
-    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=${responseType}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=${responseType}&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
     document.addEventListener('DOMContentLoaded', () => {
       const hash = window.location.hash.substring(1);
@@ -101,19 +77,16 @@
       populateDropdowns(token);
 
       document.getElementById('createInteractionBtn').addEventListener('click', () => {
-        createOutboundCall(token);
+        createInteraction(token);
       });
     }
 
     async function populateDropdowns(token) {
       try {
-        const [queues, users] = await Promise.all([
-          fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token),
-          fetchAllPages('https://api.mypurecloud.ie/api/v2/users?expand=presence', token)
-        ]);
+        const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
+        const users = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token);
 
         const queueSelect = document.getElementById('queueSelect');
-        queues.sort((a, b) => a.name.localeCompare(b.name));
         queues.forEach(queue => {
           const option = document.createElement('option');
           option.value = queue.id;
@@ -122,7 +95,6 @@
         });
 
         const userSelect = document.getElementById('userSelect');
-        users.sort((a, b) => a.name.localeCompare(b.name));
         users.forEach(user => {
           const option = document.createElement('option');
           option.value = user.id;
@@ -131,8 +103,8 @@
         });
 
       } catch (error) {
-        showStatus(`Error loading data: ${error.message}`, 'error');
         console.error('Error populating dropdowns:', error);
+        document.getElementById('statusMessage').innerText = `Error loading data: ${error.message}`;
       }
     }
 
@@ -163,22 +135,13 @@
       return allItems;
     }
 
-    async function createOutboundCall(token) {
+    async function createInteraction(token) {
       const queueId = document.getElementById('queueSelect').value;
       const userId = document.getElementById('userSelect').value;
-      const phoneNumber = document.getElementById('phoneNumber').value.trim();
-      const externalReference = document.getElementById('externalReference').value.trim();
-
-      // Validate inputs
-      if (!queueId || !userId || !phoneNumber) {
-        return showStatus('Please fill in all required fields', 'error');
-      }
-
-      showStatus('Creating outbound call...', 'processing');
+      const externalReference = document.getElementById('externalReference').value;
 
       try {
-        // 1. Create the outbound call
-        const callResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/calls', {
+        const interactionResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -186,60 +149,49 @@
           },
           body: JSON.stringify({
             queueId: queueId,
-            direction: 'outbound',
-            phoneNumber: phoneNumber,
-            callbackUserName: userId,
-            attributes: {
-              source: 'external_work_tool',
-              interactionType: 'outbound_call',
-              externalReference: externalReference || ''
-            }
+            provider: 'QualityForm',
+            direction: 'INBOUND',
+            fromName: 'External Work',
+            attributes: { 'External Link': externalReference }
           })
         });
 
-        if (!callResponse.ok) {
-          const error = await callResponse.json();
-          throw new Error(`Error creating call: ${callResponse.status} ${error.message}`);
+        if (!interactionResponse.ok) {
+          throw new Error(`Error creating interaction: ${interactionResponse.status} ${interactionResponse.statusText}`);
         }
 
-        const call = await callResponse.json();
-        const conversationId = call.id;
+        const interaction = await interactionResponse.json();
+        const conversationId = interaction.id;
 
-        // 2. Add the agent to the call
-        const participantResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/calls/${conversationId}/participants`, {
+        const conversationDetailsResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!conversationDetailsResponse.ok) {
+          throw new Error(`Error fetching conversation details: ${conversationDetailsResponse.status} ${conversationDetailsResponse.statusText}`);
+        }
+        const conversationDetails = await conversationDetailsResponse.json();
+        const participantId = conversationDetails.participants[1].id;
+
+        const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants/${participantId}/replace`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            userId: userId,
-            purpose: 'agent',
-            attributes: {
-              assignedBy: 'external_work_tool'
-            }
-          })
+          body: JSON.stringify({ userId: userId })
         });
 
-        if (!participantResponse.ok) {
-          const error = await participantResponse.json();
-          throw new Error(`Error adding agent: ${participantResponse.status} ${error.message}`);
+        if (!assignResponse.ok) {
+          throw new Error(`Error assigning user: ${assignResponse.status} ${assignResponse.statusText}`);
         }
 
-        showStatus(`Outbound call created successfully!<br>
-                  Call ID: ${conversationId}<br>
-                  Assigned to: ${document.getElementById('userSelect').selectedOptions[0].text}`, 'success');
+        // Removed the disconnection part to keep the interaction active
+        document.getElementById('statusMessage').innerText = 'Interaction created and assigned successfully!';
 
       } catch (error) {
-        console.error('Error during call creation:', error);
-        showStatus(`Failed to create outbound call: ${error.message}`, 'error');
+        console.error('Error during interaction creation:', error);
+        document.getElementById('statusMessage').innerText = `Error: ${error.message}`;
       }
-    }
-
-    function showStatus(message, type) {
-      const statusEl = document.getElementById('statusMessage');
-      statusEl.innerHTML = message;
-      statusEl.className = type;
     }
   </script>
 </body>
