@@ -2,17 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>External Work Contact</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outbound Voice Call</title>
   <link href="https://fonts.googleapis.com/css2?family=Proxima+Nova&display=swap" rel="stylesheet">
   <style>
-    body { font-family:'Proxima Nova',Arial,sans-serif; margin:20px; padding:20px }
-    #logo-container { text-align:center; margin-bottom:20px }
-    #logo { width:300px }
-    label { display:block; margin-top:10px; font-weight:bold }
-    select, input, button { width:100%; max-width:300px; padding:8px; margin-top:5px }
-    #statusMessage { margin-top:20px; font-style:italic; color:#2a7f62 }
-    .required:after { content:" *"; color:red }
+    body {
+      font-family: 'Proxima Nova', Arial, sans-serif;
+      margin: 20px;
+      padding: 20px;
+    }
+    #logo-container {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    #logo {
+      width: 300px;
+    }
+    label {
+      margin-top: 10px;
+      display: block;
+      font-weight: bold;
+    }
+    select, input, button {
+      margin-top: 5px;
+      padding: 8px;
+      width: 100%;
+      max-width: 300px;
+    }
+    #statusMessage {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #dff0d8;
+      color: #3c763d;
+    }
+    .error {
+      background-color: #f2dede;
+      color: #a94442;
+    }
+    .processing {
+      background-color: #d9edf7;
+      color: #31708f;
+    }
   </style>
 </head>
 <body>
@@ -20,7 +53,7 @@
     <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
   </div>
 
-  <h1>External Work Contact</h1>
+  <h1>Outbound Voice Call</h1>
 
   <label for="queueSelect" class="required">Select Queue:</label>
   <select id="queueSelect" required></select>
@@ -28,237 +61,185 @@
   <label for="userSelect" class="required">Select Agent:</label>
   <select id="userSelect" required></select>
 
-  <label for="contactMethod">Contact Method:</label>
-  <select id="contactMethod">
-    <option value="email">Email</option>
-    <option value="sms">SMS</option>
-  </select>
+  <label for="phoneNumber" class="required">Phone Number:</label>
+  <input type="tel" id="phoneNumber" placeholder="e.g. +441234567890" required>
 
-  <label for="emailAddress">Email Address:</label>
-  <input type="email" id="emailAddress" placeholder="e.g. user@example.com">
+  <label for="externalReference">External Reference (optional):</label>
+  <input type="text" id="externalReference" placeholder="Enter reference information">
 
-  <label for="phoneNumber">Phone Number:</label>
-  <input type="tel" id="phoneNumber" placeholder="e.g. +441234567890">
+  <button id="createInteractionBtn">Initiate Outbound Call</button>
 
-  <label for="subject">Subject (for email):</label>
-  <input type="text" id="subject" placeholder="Subject line for email">
-
-  <label for="initialMessage">Initial Message:</label>
-  <textarea id="initialMessage" rows="3" style="width:100%; max-width:300px" placeholder="Optional initial message"></textarea>
-
-  <button id="createInteractionBtn">Create Outbound Interaction</button>
   <div id="statusMessage"></div>
 
   <script>
-    // --- CONFIG ---
-    const clientId     = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-    const redirectUri  = 'https://gmcglynn88.github.io/Outbound-Chat/';
+    // Configuration
+    const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
+    const redirectUri = 'https://gmcglynn88.github.io/ExternalWorkCreation/';
     const responseType = 'token';
-    const scopes       = [
-      'conversation.email.create',
-      'conversation.messaging.create',
+    const scopes = [
+      'conversation.call.create',
       'conversation.participants.create',
       'routing.queues.read',
       'directory.users.read'
-    ];
-    const messagingIntegrationId = '<YOUR_INTEGRATION_ID>'; // for SMS
-    const provider               = 'sms'; // or "whatsapp", etc.
-    // ----------------
-
-    const oauthUrl = [
-      'https://login.mypurecloud.ie/oauth/authorize?',
-      `client_id=${clientId}`,
-      `response_type=${responseType}`,
-      `redirect_uri=${encodeURIComponent(redirectUri)}`,
-      `scope=${encodeURIComponent(scopes.join(' '))}`,
-      'state=multiDemo'
-    ].join('&');
+    ].join(' ');
+    
+    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=${responseType}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
 
     document.addEventListener('DOMContentLoaded', () => {
-      const hash   = window.location.hash.substring(1);
+      const hash = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
-      const token  = params.get('access_token');
-      if (!token) return window.location.replace(oauthUrl);
-      initializeApp(token);
-      
-      // Show/hide fields based on contact method
-      document.getElementById('contactMethod').addEventListener('change', function() {
-        const method = this.value;
-        document.getElementById('emailAddress').style.display = method === 'email' ? 'block' : 'none';
-        document.querySelector('label[for="emailAddress"]').style.display = method === 'email' ? 'block' : 'none';
-        document.getElementById('phoneNumber').style.display = method === 'sms' ? 'block' : 'none';
-        document.querySelector('label[for="phoneNumber"]').style.display = method === 'sms' ? 'block' : 'none';
-        document.getElementById('subject').style.display = method === 'email' ? 'block' : 'none';
-        document.querySelector('label[for="subject"]').style.display = method === 'email' ? 'block' : 'none';
-      });
-      
-      // Trigger initial state
-      document.getElementById('contactMethod').dispatchEvent(new Event('change'));
+      const token = params.get('access_token');
+
+      if (!token) {
+        window.location.href = oauthUrl;
+      } else {
+        initializeApp(token);
+      }
     });
 
     function initializeApp(token) {
       populateDropdowns(token);
-      document.getElementById('createInteractionBtn')
-              .addEventListener('click', () => connectExternal(token));
+
+      document.getElementById('createInteractionBtn').addEventListener('click', () => {
+        createOutboundCall(token);
+      });
     }
 
     async function populateDropdowns(token) {
       try {
-        const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
-        const users  = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users?expand=presence', token);
-        
-        const qSel = document.getElementById('queueSelect');
-        const uSel = document.getElementById('userSelect');
-        
-        // Sort queues alphabetically
+        const [queues, users] = await Promise.all([
+          fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token),
+          fetchAllPages('https://api.mypurecloud.ie/api/v2/users?expand=presence', token)
+        ]);
+
+        const queueSelect = document.getElementById('queueSelect');
         queues.sort((a, b) => a.name.localeCompare(b.name));
-        queues.forEach(q => qSel.add(new Option(q.name, q.id)));
-        
-        // Sort users alphabetically and filter for available agents if needed
+        queues.forEach(queue => {
+          const option = document.createElement('option');
+          option.value = queue.id;
+          option.text = queue.name;
+          queueSelect.add(option);
+        });
+
+        const userSelect = document.getElementById('userSelect');
         users.sort((a, b) => a.name.localeCompare(b.name));
-        users.forEach(u => uSel.add(new Option(u.name, u.id)));
-        
+        users.forEach(user => {
+          const option = document.createElement('option');
+          option.value = user.id;
+          option.text = user.name;
+          userSelect.add(option);
+        });
+
       } catch (error) {
-        document.getElementById('statusMessage').innerText = `Error loading data: ${error.message}`;
+        showStatus(`Error loading data: ${error.message}`, 'error');
         console.error('Error populating dropdowns:', error);
       }
     }
 
     async function fetchAllPages(url, token) {
-      let items = [], page = 1, more = true;
-      while (more) {
-        const res = await fetch(`${url}?pageNumber=${page}&pageSize=25`, {
+      let allItems = [];
+      let pageNumber = 1;
+      let hasMorePages = true;
+
+      while (hasMorePages) {
+        const response = await fetch(`${url}?pageNumber=${pageNumber}&pageSize=25`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        const js = await res.json();
-        items = items.concat(js.entities);
-        more  = js.pageCount > page;
-        page++;
-      }
-      return items;
-    }
 
-    async function connectExternal(token) {
-      const queueId      = document.getElementById('queueSelect').value;
-      const userId       = document.getElementById('userSelect').value;
-      const contactMethod = document.getElementById('contactMethod').value;
-      const emailAddr    = document.getElementById('emailAddress').value.trim();
-      const phoneNum     = document.getElementById('phoneNumber').value.trim();
-      const subject      = document.getElementById('subject').value.trim();
-      const initialMessage = document.getElementById('initialMessage').value.trim();
-      const statusEl     = document.getElementById('statusMessage');
-
-      // Validate inputs
-      if (contactMethod === 'email' && !emailAddr) {
-        return statusEl.innerText = '⚠️ Please enter an email address.';
-      }
-      if (contactMethod === 'sms' && !phoneNum) {
-        return statusEl.innerText = '⚠️ Please enter a phone number.';
-      }
-      if (!queueId || !userId) {
-        return statusEl.innerText = '⚠️ Please select both a queue and an agent.';
-      }
-
-      statusEl.innerText = '🚀 Creating outbound interaction...';
-
-      try {
-        let convo;
-
-        if (contactMethod === 'email') {
-          // Email conversation
-          const resp = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type':  'application/json'
-            },
-            body: JSON.stringify({
-              queueId,
-              toAddress: emailAddr,
-              fromName: 'External Work',
-              subject: subject || 'Follow up',
-              direction: 'outbound',
-              attributes: {
-                source: 'external_work_tool',
-                interactionType: 'outbound_email'
-              }
-            })
-          });
-          if (!resp.ok) {
-            const error = await resp.json();
-            throw new Error(`Email API ${resp.status} ${resp.statusText}: ${error.message}`);
-          }
-          convo = await resp.json();
-        } else {
-          // SMS conversation
-          const resp = await fetch('https://api.mypurecloud.ie/api/v2/conversations/messaging/conversations', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type':  'application/json'
-            },
-            body: JSON.stringify({
-              queueId,
-              messagingSetting: { integrationId: messagingIntegrationId },
-              toAddress: phoneNum,
-              provider,
-              direction: 'outbound',
-              attributes: {
-                source: 'external_work_tool',
-                interactionType: 'outbound_sms'
-              },
-              initialMessage: initialMessage ? {
-                textBody: initialMessage,
-                isActive: true
-              } : undefined
-            })
-          });
-          if (!resp.ok) {
-            const error = await resp.json();
-            throw new Error(`Messaging API ${resp.status} ${resp.statusText}: ${error.message}`);
-          }
-          convo = await resp.json();
+        if (!response.ok) {
+          throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
         }
 
-        // Add agent to the conversation
-        const partUrl = convo.hasOwnProperty('fromAddress')
-          ? `https://api.mypurecloud.ie/api/v2/conversations/emails/${convo.id}/participants`
-          : `https://api.mypurecloud.ie/api/v2/conversations/messaging/conversations/${convo.id}/participants`;
+        const data = await response.json();
+        allItems = allItems.concat(data.entities);
 
-        const partResp = await fetch(partUrl, {
+        if (data.pageCount > pageNumber) {
+          pageNumber++;
+        } else {
+          hasMorePages = false;
+        }
+      }
+
+      return allItems;
+    }
+
+    async function createOutboundCall(token) {
+      const queueId = document.getElementById('queueSelect').value;
+      const userId = document.getElementById('userSelect').value;
+      const phoneNumber = document.getElementById('phoneNumber').value.trim();
+      const externalReference = document.getElementById('externalReference').value.trim();
+
+      // Validate inputs
+      if (!queueId || !userId || !phoneNumber) {
+        return showStatus('Please fill in all required fields', 'error');
+      }
+
+      showStatus('Creating outbound call...', 'processing');
+
+      try {
+        // 1. Create the outbound call
+        const callResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/calls', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type':  'application/json'
+            'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ 
-            userId, 
+          body: JSON.stringify({
+            queueId: queueId,
+            direction: 'outbound',
+            phoneNumber: phoneNumber,
+            callbackUserName: userId,
+            attributes: {
+              source: 'external_work_tool',
+              interactionType: 'outbound_call',
+              externalReference: externalReference || ''
+            }
+          })
+        });
+
+        if (!callResponse.ok) {
+          const error = await callResponse.json();
+          throw new Error(`Error creating call: ${callResponse.status} ${error.message}`);
+        }
+
+        const call = await callResponse.json();
+        const conversationId = call.id;
+
+        // 2. Add the agent to the call
+        const participantResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/calls/${conversationId}/participants`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: userId,
             purpose: 'agent',
             attributes: {
               assignedBy: 'external_work_tool'
             }
           })
         });
-        if (!partResp.ok) {
-          const error = await partResp.json();
-          throw new Error(`Participant API ${partResp.status} ${partResp.statusText}: ${error.message}`);
+
+        if (!participantResponse.ok) {
+          const error = await participantResponse.json();
+          throw new Error(`Error adding agent: ${participantResponse.status} ${error.message}`);
         }
 
-        statusEl.innerHTML = `✅ <strong>Outbound interaction created successfully!</strong><br>
-                             Conversation ID: ${convo.id}<br>
-                             Assigned to agent: ${document.getElementById('userSelect').selectedOptions[0].text}<br>
-                             <small>The interaction will appear in the agent's workspace.</small>`;
-        
-        // Optionally clear form for next interaction
-        // document.getElementById('emailAddress').value = '';
-        // document.getElementById('phoneNumber').value = '';
-        // document.getElementById('initialMessage').value = '';
+        showStatus(`Outbound call created successfully!<br>
+                  Call ID: ${conversationId}<br>
+                  Assigned to: ${document.getElementById('userSelect').selectedOptions[0].text}`, 'success');
+
+      } catch (error) {
+        console.error('Error during call creation:', error);
+        showStatus(`Failed to create outbound call: ${error.message}`, 'error');
       }
-      catch (err) {
-        console.error('Error creating interaction:', err);
-        statusEl.innerHTML = `❌ <strong>Failed to create interaction:</strong><br>${err.message}`;
-      }
+    }
+
+    function showStatus(message, type) {
+      const statusEl = document.getElementById('statusMessage');
+      statusEl.innerHTML = message;
+      statusEl.className = type;
     }
   </script>
 </body>
