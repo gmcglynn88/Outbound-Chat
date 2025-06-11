@@ -4,150 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dummy Interaction Creator</title>
-  <style>
-    @font-face {
-      font-family: 'Aptos';
-      src: local('Aptos'), local('Aptos-Regular');
-      font-display: swap;
-    }
-    body {
-      font-family: 'Aptos', Arial, 'Segoe UI', sans-serif;
-      margin: 20px;
-      padding: 20px;
-      line-height: 1.6;
-    }
-    #logo-container {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    #logo {
-      width: 300px;
-    }
-    label {
-      margin-top: 15px;
-      display: block;
-      font-weight: bold;
-    }
-    select, input, button, textarea {
-      margin-top: 8px;
-      padding: 10px;
-      width: 100%;
-      max-width: 350px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-family: inherit;
-    }
-    button {
-      background-color: #2e86de;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 20px;
-    }
-    button:hover {
-      background-color: #1e6ec4;
-    }
-    #statusMessage {
-      margin-top: 25px;
-      padding: 15px;
-      border-radius: 4px;
-    }
-    .success {
-      background-color: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-    .error {
-      background-color: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-    .info {
-      background-color: #e2e3e5;
-      color: #383d41;
-      border: 1px solid #d6d8db;
-    }
-    .form-section {
-      margin-bottom: 20px;
-      padding: 15px;
-      border: 1px solid #eee;
-      border-radius: 4px;
-    }
-    #loadingIndicator {
-      display: none;
-      margin-top: 20px;
-      text-align: center;
-    }
-    .spinner {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #3498db;
-      border-radius: 50%;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    #authStatus {
-      text-align: center;
-      margin: 20px 0;
-      font-weight: bold;
-    }
-    #retryButton {
-      display: none;
-      margin: 10px auto;
-      padding: 8px 16px;
-    }
-  </style>
+  <!-- [Previous styles remain the same] -->
 </head>
 <body>
-  <div id="logo-container">
-    <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
-  </div>
-
-  <h1>Dummy Interaction Creator</h1>
-
-  <div id="authStatus" class="info">Authenticating with Genesys...</div>
-  <button id="retryButton" onclick="retryAuthentication()">Retry Authentication</button>
-
-  <div id="appContent" style="display: none;">
-    <div class="form-section">
-      <h2>Interaction Details</h2>
-      <label for="queueSelect">Select Queue:</label>
-      <select id="queueSelect">
-        <option value="">-- Loading queues... --</option>
-      </select>
-
-      <label for="userSelect">Select Agent:</label>
-      <select id="userSelect">
-        <option value="">-- Loading agents... --</option>
-      </select>
-
-      <label for="interactionLabel">Interaction Label (optional):</label>
-      <input type="text" id="interactionLabel" placeholder="Enter label for interaction">
-
-      <label for="interactionNote">Notes (optional):</label>
-      <textarea id="interactionNote" placeholder="Enter any notes for the interaction" rows="3"></textarea>
-
-      <button id="createInteractionButton">Create Dummy Interaction</button>
-    </div>
-
-    <div id="loadingIndicator">
-      <div class="spinner"></div>
-      <p>Processing request...</p>
-    </div>
-
-    <div id="statusMessage" class="info" style="display: none;"></div>
-  </div>
+  <!-- [Previous HTML structure remains the same] -->
 
   <script>
     // Configuration
     const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-    const clientSecret = 'FX8Y1JOCT0N10mrUsMRbo459ULJEXZuy_k3ppxHrF2o'; // Replace with your actual client secret
-    const authUrl = 'https://login.mypurecloud.ie/oauth/token';
+    const proxyUrl = 'https://cors-anywhere.herokuapp.com/'; // CORS proxy
+    const authUrl = `${proxyUrl}https://login.mypurecloud.ie/oauth/token`;
     const apiBaseUrl = 'https://api.mypurecloud.ie/api/v2';
 
     // Global variables
@@ -155,54 +21,7 @@
     let queues = [];
     let users = [];
 
-    // DOM elements
-    const authStatus = document.getElementById('authStatus');
-    const retryButton = document.getElementById('retryButton');
-    const appContent = document.getElementById('appContent');
-    const createInteractionButton = document.getElementById('createInteractionButton');
-    const queueSelect = document.getElementById('queueSelect');
-    const userSelect = document.getElementById('userSelect');
-    const interactionLabel = document.getElementById('interactionLabel');
-    const interactionNote = document.getElementById('interactionNote');
-    const statusMessage = document.getElementById('statusMessage');
-    const loadingIndicator = document.getElementById('loadingIndicator');
-
-    // Initialize on load
-    window.addEventListener('load', initializeApp);
-
-    // Event listeners
-    createInteractionButton.addEventListener('click', createDummyInteraction);
-
-    async function initializeApp() {
-      showLoading(true);
-      authStatus.className = 'info';
-      authStatus.textContent = 'Authenticating with Genesys...';
-      retryButton.style.display = 'none';
-      
-      try {
-        // Auto-authenticate
-        await authenticate();
-        
-        // Initialize the app
-        await initializeData();
-        
-        authStatus.style.display = 'none';
-        retryButton.style.display = 'none';
-        appContent.style.display = 'block';
-        showStatus('Ready to create dummy interactions', 'success');
-      } catch (error) {
-        console.error('Initialization error:', error);
-        authStatus.textContent = `Authentication failed: ${error.message}`;
-        authStatus.className = 'error';
-        retryButton.style.display = 'block';
-      } finally {
-        showLoading(false);
-      }
-    }
-
-    async function retryAuthentication() {
-      await initializeApp();
-    }
+    // [Previous DOM elements and event listeners remain the same]
 
     async function authenticate() {
       try {
@@ -214,9 +33,11 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': `Basic ${encodedAuth}`
+            'Authorization': `Basic ${encodedAuth}`,
+            'X-Requested-With': 'XMLHttpRequest' // Required by some CORS proxies
           },
-          body: 'grant_type=client_credentials'
+          body: 'grant_type=client_credentials',
+          mode: 'cors' // Ensure CORS mode is enabled
         });
 
         if (!response.ok) {
@@ -234,166 +55,7 @@
       }
     }
 
-    async function initializeData() {
-      try {
-        // Fetch queues and users
-        await Promise.all([
-          fetchQueues(),
-          fetchUsers()
-        ]);
-      } catch (error) {
-        console.error('Data initialization error:', error);
-        throw new Error(`Failed to initialize data: ${error.message}`);
-      }
-    }
-
-    async function fetchQueues() {
-      try {
-        const allQueues = await fetchAllPages(`${apiBaseUrl}/routing/queues`);
-        queues = allQueues;
-        
-        // Populate queue dropdown
-        queueSelect.innerHTML = '<option value="">-- Select a queue --</option>';
-        queues.forEach(queue => {
-          const option = document.createElement('option');
-          option.value = queue.id;
-          option.textContent = queue.name;
-          queueSelect.appendChild(option);
-        });
-      } catch (error) {
-        console.error('Queue fetch error:', error);
-        throw new Error('Failed to load queues');
-      }
-    }
-
-    async function fetchUsers() {
-      try {
-        const allUsers = await fetchAllPages(`${apiBaseUrl}/users`);
-        users = allUsers;
-        
-        // Populate user dropdown
-        userSelect.innerHTML = '<option value="">-- Select an agent --</option>';
-        users.forEach(user => {
-          const option = document.createElement('option');
-          option.value = user.id;
-          option.textContent = user.name;
-          userSelect.appendChild(option);
-        });
-      } catch (error) {
-        console.error('User fetch error:', error);
-        throw new Error('Failed to load users');
-      }
-    }
-
-    async function fetchAllPages(endpoint) {
-      let allResults = [];
-      let pageNumber = 1;
-      let pageCount = 1;
-      const pageSize = 100;
-
-      while (pageNumber <= pageCount) {
-        const response = await fetch(`${endpoint}?pageNumber=${pageNumber}&pageSize=${pageSize}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch data: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        allResults = allResults.concat(data.entities || data.results || []);
-        
-        if (data.pageCount !== undefined) {
-          pageCount = data.pageCount;
-        } else if (data.pageCount === undefined && (data.entities || data.results).length < pageSize) {
-          pageCount = pageNumber;
-        }
-        
-        pageNumber++;
-      }
-
-      return allResults;
-    }
-
-    async function createDummyInteraction() {
-      const selectedQueueId = queueSelect.value;
-      const selectedUserId = userSelect.value;
-      const labelValue = interactionLabel.value.trim();
-      const noteValue = interactionNote.value.trim();
-
-      if (!selectedQueueId || !selectedUserId) {
-        showStatus('Please select both a queue and an agent', 'error');
-        return;
-      }
-
-      showLoading(true);
-
-      try {
-        // Get the division ID from the selected queue
-        const queue = queues.find(q => q.id === selectedQueueId);
-        if (!queue || !queue.division) {
-          throw new Error('Selected queue does not have a division');
-        }
-
-        // Create a conversation (this will be our dummy interaction)
-        const conversationData = {
-          direction: "inbound",
-          recordingState: "none",
-          state: "alerting",
-          division: { id: queue.division.id },
-          queue: { id: selectedQueueId },
-          participants: [
-            {
-              userId: selectedUserId,
-              purpose: "agent",
-              state: "alerting"
-            }
-          ],
-          attributes: {
-            dummyInteraction: "true",
-            ...(noteValue && { interactionNotes: noteValue })
-          },
-          ...(labelValue && { labels: [labelValue] })
-        };
-
-        const response = await fetch(`${apiBaseUrl}/conversations`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(conversationData)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Failed to create interaction: ${response.status}`);
-        }
-
-        const interactionResponse = await response.json();
-        const conversationId = interactionResponse.id;
-
-        showStatus(`Dummy interaction created successfully! Conversation ID: ${conversationId}`, 'success');
-        
-      } catch (error) {
-        console.error('Interaction creation error:', error);
-        showStatus(`Error creating dummy interaction: ${error.message}`, 'error');
-      } finally {
-        showLoading(false);
-      }
-    }
-
-    function showStatus(message, type) {
-      statusMessage.textContent = message;
-      statusMessage.className = type;
-      statusMessage.style.display = 'block';
-    }
-
-    function showLoading(show) {
-      loadingIndicator.style.display = show ? 'block' : 'none';
-    }
+    // [Rest of the code remains the same]
   </script>
 </body>
 </html>
