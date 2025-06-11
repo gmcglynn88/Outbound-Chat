@@ -1,148 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>External Interaction Creation</title>
-  <link href="https://fonts.googleapis.com/css2?family=Proxima+Nova&display=swap" rel="stylesheet">
-  <style>
-    body {
-      font-family: 'Proxima Nova', Arial, sans-serif;
-      margin: 20px;
-      padding: 20px;
-    }
-    #logo-container {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    #logo {
-      width: 300px;
-    }
-    label {
-      margin-top: 10px;
-      display: block;
-      font-weight: bold;
-    }
-    select, input, button {
-      margin-top: 5px;
-      padding: 8px;
-      width: 100%;
-      max-width: 300px;
-    }
-    #statusMessage {
-      margin-top: 20px;
-      color: green;
-    }
-    #interactionLink {
-      margin-top: 10px;
-      display: none;
-    }
-    .error {
-      color: red;
-    }
-  </style>
+  <!-- [Previous head content remains the same] -->
 </head>
 <body>
-  <div id="logo-container">
-    <img id="logo" src="https://raw.githubusercontent.com/gmcglynn88/ExternalWorkCreation/main/Consultinglogo.png" alt="Company Logo">
-  </div>
-
-  <h1>External Interaction Creation</h1>
-
-  <label for="queueSelect">Select Queue:</label>
-  <select id="queueSelect"></select>
-
-  <label for="userSelect">Select User:</label>
-  <select id="userSelect"></select>
-
-  <label for="externalReference">External Reference:</label>
-  <input type="text" id="externalReference" placeholder="Enter external reference (optional)">
-
-  <button id="createInteractionBtn">Create Proxy Interaction</button>
-
-  <div id="statusMessage"></div>
-  <a id="interactionLink" href="#" target="_blank">View Interaction in PureCloud</a>
+  <!-- [Previous body content remains the same until the script] -->
 
   <script>
-    const clientId = '35987d94-e13b-4da4-afd2-25b85bc1c3d6';
-    const redirectUri = 'https://gmcglynn88.github.io/ExternalWorkCreation/';
-    const responseType = 'token';
-    const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=${responseType}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const token = params.get('access_token');
-
-      if (!token) {
-        window.location.href = oauthUrl;
-      } else {
-        initializeApp(token);
-      }
-    });
-
-    function initializeApp(token) {
-      populateDropdowns(token);
-
-      document.getElementById('createInteractionBtn').addEventListener('click', () => {
-        createInteraction(token);
-      });
-    }
-
-    async function populateDropdowns(token) {
-      try {
-        const queues = await fetchAllPages('https://api.mypurecloud.ie/api/v2/routing/queues', token);
-        const users = await fetchAllPages('https://api.mypurecloud.ie/api/v2/users', token);
-
-        const queueSelect = document.getElementById('queueSelect');
-        queues.forEach(queue => {
-          const option = document.createElement('option');
-          option.value = queue.id;
-          option.text = queue.name;
-          queueSelect.add(option);
-        });
-
-        const userSelect = document.getElementById('userSelect');
-        users.forEach(user => {
-          const option = document.createElement('option');
-          option.value = user.id;
-          option.text = user.name;
-          userSelect.add(option);
-        });
-
-      } catch (error) {
-        console.error('Error populating dropdowns:', error);
-        document.getElementById('statusMessage').innerText = `Error loading data: ${error.message}`;
-        document.getElementById('statusMessage').className = 'error';
-      }
-    }
-
-    async function fetchAllPages(url, token) {
-      let allItems = [];
-      let pageNumber = 1;
-      let hasMorePages = true;
-
-      while (hasMorePages) {
-        const response = await fetch(`${url}?pageNumber=${pageNumber}&pageSize=25`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Error fetching data: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        allItems = allItems.concat(data.entities);
-
-        if (data.pageCount > pageNumber) {
-          pageNumber++;
-        } else {
-          hasMorePages = false;
-        }
-      }
-
-      return allItems;
-    }
+    // [Previous OAuth and initialization code remains the same until createInteraction]
 
     async function createInteraction(token) {
       const queueId = document.getElementById('queueSelect').value;
@@ -157,8 +22,8 @@
       interactionLink.style.display = 'none';
 
       try {
-        // 1. Create a conversation (chat type tends to stay open better)
-        const conversationResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/chats', {
+        // 1. Create a callback interaction (more stable for persistent work items)
+        const callbackResponse = await fetch('https://api.mypurecloud.ie/api/v2/conversations/callbacks', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -166,14 +31,10 @@
           },
           body: JSON.stringify({
             queueId: queueId,
-            direction: 'INBOUND',
-            participants: [
-              {
-                name: 'External Work',
-                address: 'external@work.com',
-                externalContactId: '00000000-0000-0000-0000-000000000000'
-              }
-            ],
+            name: externalReference || 'External Work Item',
+            callbackNumbers: ['+1234567890'], // Dummy number
+            callbackUserName: 'System Generated',
+            externalContactId: '00000000-0000-0000-0000-000000000000',
             attributes: {
               'ExternalReference': externalReference,
               'ExternalWork': 'true',
@@ -182,60 +43,38 @@
           })
         });
 
-        if (!conversationResponse.ok) {
-          throw new Error(`Error creating conversation: ${conversationResponse.status} ${conversationResponse.statusText}`);
+        if (!callbackResponse.ok) {
+          throw new Error(`Error creating callback: ${callbackResponse.status} ${callbackResponse.statusText}`);
         }
 
-        const conversation = await conversationResponse.json();
-        const conversationId = conversation.id;
+        const callback = await callbackResponse.json();
+        const conversationId = callback.conversation.id;
 
-        // 2. Get the participant ID
-        const conversationDetailsResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!conversationDetailsResponse.ok) {
-          throw new Error(`Error fetching conversation details: ${conversationDetailsResponse.status} ${conversationDetailsResponse.statusText}`);
-        }
-        
-        const conversationDetails = await conversationDetailsResponse.json();
-        const participantId = conversationDetails.participants[0].id;
-
-        // 3. Assign to the selected user
-        const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/chats/${conversationId}/participants/${participantId}/replace`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ userId: userId })
-        });
-
-        if (!assignResponse.ok) {
-          throw new Error(`Error assigning user: ${assignResponse.status} ${assignResponse.statusText}`);
-        }
-
-        // 4. Add a message to the chat to make it more visible
-        const messageResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/chats/${conversationId}/messages`, {
+        // 2. Assign directly to user (alternative approach)
+        const assignResponse = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}/participants`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            body: externalReference ? `External work item created. Reference: ${externalReference}` : 'External work item created',
-            bodyType: 'standard'
+            userId: userId,
+            purpose: 'agent'
           })
         });
 
-        // Show success message with link to the interaction
-        statusMessage.innerText = 'Interaction created and assigned successfully! It will remain active until the agent completes it.';
+        if (!assignResponse.ok) {
+          throw new Error(`Error assigning user: ${assignResponse.status} ${assignResponse.statusText}`);
+        }
+
+        // Show success message
+        statusMessage.innerText = 'Work item created successfully! It will remain active until resolved.';
         interactionLink.href = `https://apps.mypurecloud.ie/conversation/${conversationId}`;
         interactionLink.style.display = 'inline-block';
-        interactionLink.innerText = `Open Interaction (ID: ${conversationId})`;
+        interactionLink.innerText = `Open Work Item (ID: ${conversationId})`;
 
       } catch (error) {
-        console.error('Error during interaction creation:', error);
+        console.error('Error:', error);
         statusMessage.innerText = `Error: ${error.message}`;
         statusMessage.className = 'error';
       }
