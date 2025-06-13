@@ -146,8 +146,8 @@
         
         <div id="main-form" style="display:none;">
             <label for="queue-select">Queue</label>
-            <select id="queue-select" disabled>
-                <option value="2fec5d88-bbf0-41bb-ab5a-95199438a2aa">MS Teams Consult</option>
+            <select id="queue-select">
+                <option value="2fec5d88-bbf0-41bb-ab5a-95199438a2aa" selected>MS Teams Consult</option>
             </select>
             
             <label for="user-select">Agent</label>
@@ -243,7 +243,8 @@ function showError(message) {
 }
 
 document.getElementById('create-btn').onclick = async () => {
-    const queueId = "2fec5d88-bbf0-41bb-ab5a-95199438a2aa"; // Hardcoded queue ID
+    const queueId = "2fec5d88-bbf0-41bb-ab5a-95199438a2aa"; // Your specified queue ID
+    const queueName = "Priority Support Queue"; // Display name
     const userId = document.getElementById('user-select').value;
     const interactionLabel = document.getElementById('interaction-label').value;
     
@@ -312,7 +313,7 @@ document.getElementById('create-btn').onclick = async () => {
         showSuccess(`
             <strong>Interaction successfully created and assigned</strong>
             <p style="margin: 0.5rem 0 0;">
-                <strong>Queue:</strong> Priority Support Queue<br>
+                <strong>Queue:</strong> ${queueName}<br>
                 <strong>Agent:</strong> ${document.getElementById('user-select').selectedOptions[0].text}<br>
                 <strong>ID:</strong> ${conversation.id}
             </p>
