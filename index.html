@@ -151,33 +151,26 @@
 
 <script>
 const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-const redirectUri = 'https://gmcglynn88.github.io/Outbound-Chat/'; // Use current page URL
+const redirectUri = 'https://gmcglynn88.github.io/Outbound-Chat/';
 let accessToken = null;
 
 // Auto-authenticate on page load
 window.onload = async () => {
-    // First try to get token from URL fragment
     const hash = window.location.hash;
     if (hash.startsWith('#access_token=')) {
         accessToken = hash.match(/access_token=([^&]*)/)[1];
-        window.history.replaceState({}, document.title, window.location.pathname); // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
         initializeApp();
-    } 
-    // If no token in URL, try to authenticate silently
-    else {
+    } else {
         try {
             const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=none`;
-            
-            // Try silent auth in hidden iframe
             const iframe = document.createElement('iframe');
             iframe.style.display = 'none';
             iframe.src = oauthUrl;
             document.body.appendChild(iframe);
             
-            // Wait for token (will only work if already logged in to Genesys)
             setTimeout(() => {
                 if (!accessToken) {
-                    // If silent auth fails, redirect to login
                     window.location = oauthUrl.replace('&prompt=none', '');
                 }
             }, 1000);
@@ -190,11 +183,8 @@ window.onload = async () => {
 
 function initializeApp() {
     document.getElementById('main-form').style.display = 'block';
-    
     Promise.all([loadQueues(), loadUsers()])
-        .catch(err => {
-            showError('Failed to load data: ' + err.message);
-        });
+        .catch(err => showError('Failed to load data: ' + err.message));
 }
 
 async function fetchAll(url) {
@@ -216,17 +206,13 @@ async function fetchAll(url) {
 async function loadQueues() {
     const queues = await fetchAll('https://api.mypurecloud.ie/api/v2/routing/queues');
     const select = document.getElementById('queue-select');
-    select.innerHTML = queues.map(q => 
-        `<option value="${q.id}">${q.name}</option>`
-    ).join('');
+    select.innerHTML = queues.map(q => `<option value="${q.id}">${q.name}</option>`).join('');
 }
 
 async function loadUsers() {
     const users = await fetchAll('https://api.mypurecloud.ie/api/v2/users');
     const select = document.getElementById('user-select');
-    select.innerHTML = users.map(u => 
-        `<option value="${u.id}">${u.name}</option>` // Removed email display
-    ).join('');
+    select.innerHTML = users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
 }
 
 function showLoader(show) {
@@ -254,7 +240,6 @@ document.getElementById('create-btn').onclick = async () => {
     document.getElementById('result').style.display = 'none';
     
     try {
-        // Step 1: Create conversation in queue
         const conversationBody = {
             queueId: queueId,
             direction: 'INBOUND',
@@ -263,7 +248,7 @@ document.getElementById('create-btn').onclick = async () => {
             subject: interactionLabel,
             priority: 1,
             autoAnswer: true,
-            provider: 'purecloud', // REQUIRED FIELD
+            provider: 'external', // CHANGED FROM 'purecloud' TO 'external'
             attributes: {
                 'targetedAgentId': userId,
                 'isForcedAssignment': 'true',
@@ -295,7 +280,6 @@ document.getElementById('create-btn').onclick = async () => {
         
         const conversation = await convRes.json();
         
-        // Step 2: Force assignment to selected agent
         const assignRes = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversation.id}/participants`, {
             method: 'POST',
             headers: {
