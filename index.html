@@ -6,8 +6,9 @@
     <style>
         body { font-family: Arial, sans-serif; padding: 2rem; max-width: 480px; margin: auto; }
         label { display: block; margin-top: 1rem; }
-        select, input, button { width: 100%; padding: 0.5rem; margin-top: 0.5rem; }
+        select, input, button, textarea { width: 100%; padding: 0.5rem; margin-top: 0.5rem; }
         button { margin-top: 2rem; background: #0072ce; color: white; border: none; border-radius: 5px; }
+        textarea { height: 80px; }
     </style>
 </head>
 <body>
@@ -20,8 +21,14 @@
         <label>Agent:
             <select id="user-select"></select>
         </label>
+        <label>Interaction Label/Content:
+            <input id="interaction-label" placeholder="e.g. Customer Complaint" value="Test Interaction" />
+        </label>
         <label>Subject:
             <input id="subject" placeholder="Email subject" value="Test Interaction" />
+        </label>
+        <label>Message Content:
+            <textarea id="message-content" placeholder="Enter detailed content here..."></textarea>
         </label>
         <label>External Reference:
             <input id="external-ref" placeholder="https://..." />
@@ -91,25 +98,30 @@ document.getElementById('create-btn').onclick = async () => {
     const userId = document.getElementById('user-select').value;
     const externalRef = document.getElementById('external-ref').value;
     const subject = document.getElementById('subject').value;
+    const interactionLabel = document.getElementById('interaction-label').value;
+    const messageContent = document.getElementById('message-content').value || "No content provided";
     
     const body = {
         queueId,
         provider: 'QualityForm',
         direction: 'INBOUND',
-        fromName: 'External Work',
-        fromAddress: 'external@test.com',
+        fromName: interactionLabel,  // Changed from 'External Work' to user-provided label
+        fromAddress: 'no-reply@test.com',
         subject: subject,
         priority: 1,
         autoAnswer: true,
         attributes: { 
             'External Link': externalRef,
             'isDummyInteraction': 'true',
-            'keepOpen': 'true'
+            'keepOpen': 'true',
+            'InteractionContent': messageContent  // Adding the detailed content as an attribute
         },
         toAddresses: ['agent@test.com'],
         participantInfo: {
             userId: userId
-        }
+        },
+        // Adding the message body to the email
+        htmlBody: `<p>${messageContent.replace(/\n/g, '<br>')}</p>`
     };
 
     try {
@@ -133,7 +145,8 @@ document.getElementById('create-btn').onclick = async () => {
         await addParticipant(data.id, userId);
         
         document.getElementById('result').innerHTML =
-            `<b>Success!</b> Conversation ID: ${data.id}<br>
+            `<b>Success!</b> Interaction created with label: "${interactionLabel}"<br>
+             Conversation ID: ${data.id}<br>
              The interaction should now appear in the agent's workspace.`;
     } catch (err) {
         console.error('Error creating interaction:', err);
