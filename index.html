@@ -256,6 +256,7 @@ document.getElementById('create-btn').onclick = async () => {
     document.getElementById('result').style.display = 'none';
     
     try {
+        // Step 1: Create conversation in queue with direct agent assignment
         const conversationBody = {
             queueId: queueId,
             direction: 'INBOUND',
@@ -269,7 +270,8 @@ document.getElementById('create-btn').onclick = async () => {
                 'targetedAgentId': userId,
                 'isForcedAssignment': 'true',
                 'interactionLabel': interactionLabel,
-                'createdVia': 'Targeted Interaction Tool'
+                'createdVia': 'Targeted Interaction Tool',
+                'skipQueue': 'true'  // Ensures direct routing to agent
             },
             toAddresses: ['support@company.com'],
             htmlBody: `
@@ -280,10 +282,19 @@ document.getElementById('create-btn').onclick = async () => {
                         Created: ${new Date().toLocaleString()}
                     </p>
                 </div>
-            `
+            `,
+            // Directly assign to agent in the initial creation
+            participants: [{
+                userId: userId,
+                purpose: 'agent',
+                address: 'agent@company.com',
+                attributes: {
+                    'isForcedAssignment': 'true',
+                    'assignmentSource': 'Targeted Tool'
+                }
+            }]
         };
 
-        // Step 1: Create the conversation
         const convRes = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
             method: 'POST',
             headers: {
@@ -293,57 +304,36 @@ document.getElementById('create-btn').onclick = async () => {
             body: JSON.stringify(conversationBody)
         });
         
-        let conversation;
         if (!convRes.ok) {
-            const errorData = await convRes.json().catch(() => null);
-            if (errorData?.status === 'error') {
+            const errorText = await convRes.text();
+            try {
+                const errorData = JSON.parse(errorText);
                 throw new Error(errorData.message || 'Failed to create conversation');
+            } catch {
+                throw new Error(`API Error: ${convRes.status} ${errorText}`);
             }
-            throw new Error(`API Error: ${convRes.status} ${convRes.statusText}`);
         }
         
-        conversation = await convRes.json();
-        
-        // Step 2: Add participant (non-blocking)
-        try {
-            const assignRes = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversation.id}/participants`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    userId: userId,
-                    purpose: 'agent',
-                    address: 'agent@company.com',
-                    attributes: {
-                        'isForcedAssignment': 'true',
-                        'assignmentSource': 'Targeted Tool'
-                    }
-                })
-            });
-            
-            if (!assignRes.ok) {
-                console.warn('Participant assignment failed:', await assignRes.text());
-            }
-        } catch (e) {
-            console.warn('Participant assignment error:', e);
-        }
+        const conversation = await convRes.json();
         
         showSuccess(`
-            <strong>Interaction successfully created</strong>
+            <strong>Interaction successfully created and assigned</strong>
             <p style="margin: 0.5rem 0 0;">
                 <strong>Queue:</strong> ${document.getElementById('queue-select').selectedOptions[0].text}<br>
                 <strong>Agent:</strong> ${document.getElementById('user-select').selectedOptions[0].text}<br>
                 <strong>ID:</strong> ${conversation.id}
             </p>
+            <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
+                The interaction has been directly assigned to the agent and should appear in their workspace immediately.
+            </p>
         `);
     } catch (err) {
         showError(`
             <strong>Error during creation</strong>
-            <p style="margin: 0.5rem 0 0;">${err.message}</p>
+            <p style="margin: 0.5rem 0 0;">${err.message.includes('Failed to fetch') ? 'Network error - please check your connection' : err.message}</p>
             <p style="font-size: 0.9em; color: #666; margin-top: 0.5rem;">
-                Note: The interaction may have been created successfully.
+                Note: The interaction may have been created successfully despite this message.
+                <br>Check the agent's workspace to confirm.
             </p>
         `);
         console.error('Error:', err);
