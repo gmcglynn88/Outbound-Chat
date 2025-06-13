@@ -146,7 +146,9 @@
         
         <div id="main-form" style="display:none;">
             <label for="queue-select">Queue</label>
-            <select id="queue-select"></select>
+            <select id="queue-select" disabled>
+                <option value="2fec5d88-bbf0-41bb-ab5a-95199438a2aa">Priority Support Queue</option>
+            </select>
             
             <label for="user-select">Agent</label>
             <select id="user-select"></select>
@@ -199,8 +201,7 @@ window.onload = async () => {
 
 function initializeApp() {
     document.getElementById('main-form').style.display = 'block';
-    Promise.all([loadQueues(), loadUsers()])
-        .catch(err => showError('Failed to load data: ' + err.message));
+    loadUsers().catch(err => showError('Failed to load agents: ' + err.message));
 }
 
 async function fetchAll(url) {
@@ -217,12 +218,6 @@ async function fetchAll(url) {
         page++;
     } while (items.length < total);
     return items;
-}
-
-async function loadQueues() {
-    const queues = await fetchAll('https://api.mypurecloud.ie/api/v2/routing/queues');
-    const select = document.getElementById('queue-select');
-    select.innerHTML = queues.map(q => `<option value="${q.id}">${q.name}</option>`).join('');
 }
 
 async function loadUsers() {
@@ -248,7 +243,7 @@ function showError(message) {
 }
 
 document.getElementById('create-btn').onclick = async () => {
-    const queueId = document.getElementById('queue-select').value;
+    const queueId = "2fec5d88-bbf0-41bb-ab5a-95199438a2aa"; // Hardcoded queue ID
     const userId = document.getElementById('user-select').value;
     const interactionLabel = document.getElementById('interaction-label').value;
     
@@ -256,7 +251,6 @@ document.getElementById('create-btn').onclick = async () => {
     document.getElementById('result').style.display = 'none';
     
     try {
-        // Step 1: Create conversation in queue with direct agent assignment
         const conversationBody = {
             queueId: queueId,
             direction: 'INBOUND',
@@ -271,7 +265,7 @@ document.getElementById('create-btn').onclick = async () => {
                 'isForcedAssignment': 'true',
                 'interactionLabel': interactionLabel,
                 'createdVia': 'Targeted Interaction Tool',
-                'skipQueue': 'true'  // Ensures direct routing to agent
+                'skipQueue': 'true'
             },
             toAddresses: ['support@company.com'],
             htmlBody: `
@@ -283,7 +277,6 @@ document.getElementById('create-btn').onclick = async () => {
                     </p>
                 </div>
             `,
-            // Directly assign to agent in the initial creation
             participants: [{
                 userId: userId,
                 purpose: 'agent',
@@ -319,7 +312,7 @@ document.getElementById('create-btn').onclick = async () => {
         showSuccess(`
             <strong>Interaction successfully created and assigned</strong>
             <p style="margin: 0.5rem 0 0;">
-                <strong>Queue:</strong> ${document.getElementById('queue-select').selectedOptions[0].text}<br>
+                <strong>Queue:</strong> Priority Support Queue<br>
                 <strong>Agent:</strong> ${document.getElementById('user-select').selectedOptions[0].text}<br>
                 <strong>ID:</strong> ${conversation.id}
             </p>
