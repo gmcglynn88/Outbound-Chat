@@ -22,6 +22,16 @@
             margin: 0 auto;
         }
         
+        .logo-container {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        #logo {
+            max-width: 200px;
+            height: auto;
+        }
+        
         .card {
             background: white;
             border-radius: 8px;
@@ -35,6 +45,7 @@
             font-weight: 600;
             margin-bottom: 1.5rem;
             font-size: 1.8rem;
+            text-align: center;
         }
         
         label {
@@ -125,6 +136,10 @@
     </style>
 </head>
 <body>
+    <div class="logo-container">
+        <img id="logo" src="https://github.com/gmcglynn88/GDPR/blob/4883152b4214d499b0c2680616a6c87aeb0e0982/Consultinglogo%20(1).png?raw=true" alt="Company Logo">
+    </div>
+    
     <div class="card">
         <h1>Targeted Interaction Creator</h1>
         
@@ -248,7 +263,7 @@ document.getElementById('create-btn').onclick = async () => {
             subject: interactionLabel,
             priority: 1,
             autoAnswer: true,
-            provider: 'external', // CHANGED FROM 'purecloud' TO 'external'
+            provider: 'external',
             attributes: {
                 'targetedAgentId': userId,
                 'isForcedAssignment': 'true',
