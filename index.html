@@ -6,8 +6,8 @@
     <title>Genesys Targeted Interaction Creator</title>
     <style>
         :root {
-            --primary-color: #0072ce;
-            --primary-hover: #005fa3;
+            --primary-color: #63AB8F;
+            --primary-hover: #4D8F77;
             --border-color: #e0e0e0;
             --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
@@ -57,7 +57,7 @@
         select:focus, input:focus {
             outline: none;
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(0, 114, 206, 0.2);
+            box-shadow: 0 0 0 2px rgba(99, 171, 143, 0.2);
         }
         
         button {
@@ -78,14 +78,6 @@
         
         button:hover {
             background: var(--primary-hover);
-        }
-        
-        #login-btn {
-            background: #333;
-        }
-        
-        #login-btn:hover {
-            background: #222;
         }
         
         #result {
@@ -136,8 +128,6 @@
     <div class="card">
         <h1>Targeted Interaction Creator</h1>
         
-        <button id="login-btn">Login with Genesys</button>
-        
         <div id="main-form" style="display:none;">
             <label for="queue-select">Queue</label>
             <select id="queue-select"></select>
@@ -161,28 +151,51 @@
 
 <script>
 const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-const redirectUri = 'https://gmcglynn88.github.io/Outbound-Chat/';
-const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
+const redirectUri = window.location.href.split('?')[0]; // Use current page URL
 let accessToken = null;
 
-document.getElementById('login-btn').onclick = () => {
-    window.location = oauthUrl;
-};
-
+// Auto-authenticate on page load
 window.onload = async () => {
+    // First try to get token from URL fragment
     const hash = window.location.hash;
     if (hash.startsWith('#access_token=')) {
         accessToken = hash.match(/access_token=([^&]*)/)[1];
-        document.getElementById('login-btn').style.display = 'none';
-        document.getElementById('main-form').style.display = 'block';
-        
+        window.history.replaceState({}, document.title, window.location.pathname); // Clean URL
+        initializeApp();
+    } 
+    // If no token in URL, try to authenticate silently
+    else {
         try {
-            await Promise.all([loadQueues(), loadUsers()]);
+            const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=none`;
+            
+            // Try silent auth in hidden iframe
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = oauthUrl;
+            document.body.appendChild(iframe);
+            
+            // Wait for token (will only work if already logged in to Genesys)
+            setTimeout(() => {
+                if (!accessToken) {
+                    // If silent auth fails, redirect to login
+                    window.location = oauthUrl.replace('&prompt=none', '');
+                }
+            }, 1000);
         } catch (err) {
-            showError('Failed to load data: ' + err.message);
+            console.error('Silent auth failed:', err);
+            window.location = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
         }
     }
 };
+
+function initializeApp() {
+    document.getElementById('main-form').style.display = 'block';
+    
+    Promise.all([loadQueues(), loadUsers()])
+        .catch(err => {
+            showError('Failed to load data: ' + err.message);
+        });
+}
 
 async function fetchAll(url) {
     let items = [];
@@ -212,7 +225,7 @@ async function loadUsers() {
     const users = await fetchAll('https://api.mypurecloud.ie/api/v2/users');
     const select = document.getElementById('user-select');
     select.innerHTML = users.map(u => 
-        `<option value="${u.id}">${u.name} (${u.email})</option>`
+        `<option value="${u.id}">${u.name}</option>` // Removed email display
     ).join('');
 }
 
@@ -259,7 +272,7 @@ document.getElementById('create-btn').onclick = async () => {
             toAddresses: ['support@company.com'],
             htmlBody: `
                 <div style="font-family: Aptos, sans-serif; line-height: 1.5;">
-                    <h3 style="color: #0072ce;">${interactionLabel}</h3>
+                    <h3 style="color: #63AB8F;">${interactionLabel}</h3>
                     <p>This interaction was specifically assigned to you.</p>
                     <p style="color: #666; font-size: 0.9em;">
                         Created: ${new Date().toLocaleString()}
