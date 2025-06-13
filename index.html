@@ -154,7 +154,7 @@
             <select id="user-select"></select>
             
             <label for="interaction-label">Interaction Label</label>
-            <input id="interaction-label" placeholder="e.g. VIP Customer Follow-up" value="Enter Reference">
+            <input id="interaction-label" placeholder="Enter Reference">
             
             <div class="loader" id="loader">
                 <div class="spinner"></div>
@@ -243,10 +243,14 @@ function showError(message) {
 }
 
 document.getElementById('create-btn').onclick = async () => {
-    const queueId = "2fec5d88-bbf0-41bb-ab5a-95199438a2aa"; // Your specified queue ID
-    const queueName = "Priority Support Queue"; // Display name
+    const queueId = "2fec5d88-bbf0-41bb-ab5a-95199438a2aa";
     const userId = document.getElementById('user-select').value;
     const interactionLabel = document.getElementById('interaction-label').value;
+    
+    if (!interactionLabel || interactionLabel.trim() === '') {
+        showError('Please enter a reference for the interaction');
+        return;
+    }
     
     showLoader(true);
     document.getElementById('result').style.display = 'none';
@@ -309,13 +313,13 @@ document.getElementById('create-btn').onclick = async () => {
         }
         
         const conversation = await convRes.json();
+        const agentName = document.getElementById('user-select').selectedOptions[0].text;
         
         showSuccess(`
             <strong>Interaction successfully created and assigned</strong>
             <p style="margin: 0.5rem 0 0;">
-                <strong>Queue:</strong> ${queueName}<br>
-                <strong>Agent:</strong> ${document.getElementById('user-select').selectedOptions[0].text}<br>
-                <strong>ID:</strong> ${conversation.id}
+                <strong>Agent:</strong> ${agentName}<br>
+                <strong>Reference:</strong> ${interactionLabel}
             </p>
             <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
                 The interaction has been directly assigned to the agent and should appear in their workspace immediately.
