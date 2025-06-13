@@ -20,6 +20,9 @@
         <label>Agent:
             <select id="user-select"></select>
         </label>
+        <label>Subject:
+            <input id="subject" placeholder="Email subject" value="Test Interaction" />
+        </label>
         <label>External Reference:
             <input id="external-ref" placeholder="https://..." />
         </label>
@@ -87,13 +90,26 @@ document.getElementById('create-btn').onclick = async () => {
     const queueId = document.getElementById('queue-select').value;
     const userId = document.getElementById('user-select').value;
     const externalRef = document.getElementById('external-ref').value;
+    const subject = document.getElementById('subject').value;
+    
     const body = {
         queueId,
         provider: 'QualityForm',
         direction: 'INBOUND',
         fromName: 'External Work',
-        attributes: { 'External Link': externalRef },
-        // You *could* assign to userId using participant info, but for a dummy, keep it clean.
+        fromAddress: 'external@test.com',
+        subject: subject,
+        priority: 1,
+        autoAnswer: true,
+        attributes: { 
+            'External Link': externalRef,
+            'isDummyInteraction': 'true',
+            'keepOpen': 'true'
+        },
+        toAddresses: ['agent@test.com'],
+        participantInfo: {
+            userId: userId
+        }
     };
 
     try {
@@ -105,15 +121,48 @@ document.getElementById('create-btn').onclick = async () => {
             },
             body: JSON.stringify(body)
         });
-        if (!res.ok) throw new Error('Create failed: ' + res.status);
+        
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(`Create failed: ${res.status} - ${errorData.message || 'Unknown error'}`);
+        }
+        
         const data = await res.json();
+        
+        // Optionally add the agent as a participant if not already done
+        await addParticipant(data.id, userId);
+        
         document.getElementById('result').innerHTML =
-            `<b>Success!</b> Conversation ID: ${data.id}`;
+            `<b>Success!</b> Conversation ID: ${data.id}<br>
+             The interaction should now appear in the agent's workspace.`;
     } catch (err) {
+        console.error('Error creating interaction:', err);
         document.getElementById('result').innerHTML =
             `<b style="color:red;">Error:</b> ${err.message}`;
     }
 };
+
+async function addParticipant(conversationId, userId) {
+    try {
+        const res = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/${conversationId}/participants`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userId: userId,
+                purpose: 'agent'
+            })
+        });
+        
+        if (!res.ok) {
+            console.warn('Failed to add participant, but interaction was created');
+        }
+    } catch (err) {
+        console.warn('Error adding participant:', err);
+    }
+}
 </script>
 </body>
 </html>
