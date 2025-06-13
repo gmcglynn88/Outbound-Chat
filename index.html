@@ -263,6 +263,7 @@ document.getElementById('create-btn').onclick = async () => {
             subject: interactionLabel,
             priority: 1,
             autoAnswer: true,
+            provider: 'purecloud', // REQUIRED FIELD
             attributes: {
                 'targetedAgentId': userId,
                 'isForcedAssignment': 'true',
