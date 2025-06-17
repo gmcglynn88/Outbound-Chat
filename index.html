@@ -242,6 +242,32 @@ function showError(message) {
     result.style.display = 'block';
 }
 
+async function updateParticipant(conversationId, participantId, userId) {
+    const updateUrl = `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants/${participantId}`;
+    
+    const response = await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            userId: userId,
+            attributes: {
+                'isForcedAssignment': 'true',
+                'assignmentSource': 'Targeted Tool'
+            }
+        })
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to update participant: ${errorText}`);
+    }
+    
+    return response.json();
+}
+
 document.getElementById('create-btn').onclick = async () => {
     const queueId = "2fec5d88-bbf0-41bb-ab5a-95199438a2aa";
     const userId = document.getElementById('user-select').value;
@@ -293,11 +319,11 @@ document.getElementById('create-btn').onclick = async () => {
             }]
         };
 
+        // Step 1: Create the conversation
         const convRes = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
-            
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(conversationBody)
@@ -314,12 +340,19 @@ document.getElementById('create-btn').onclick = async () => {
         }
         
         const conversation = await convRes.json();
+        
+        // Step 2: Ensure the participant is properly assigned
+        if (conversation.participants && conversation.participants.length > 0) {
+            const participantId = conversation.participants[0].id;
+            await updateParticipant(conversation.id, participantId, userId);
+        }
+        
         const agentName = document.getElementById('user-select').selectedOptions[0].text;
         
         showSuccess(`
             <strong>Interaction successfully created and assigned</strong>
             <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
-                The interaction has been directly assigned to your interactions pannel.
+                The interaction has been directly assigned to ${agentName}'s interactions panel.
             </p>
         `);
     } catch (err) {
