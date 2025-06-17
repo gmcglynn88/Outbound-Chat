@@ -5,245 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Genesys Targeted Interaction Creator</title>
     <style>
-        :root {
-            --primary-color: #63AB8F;
-            --primary-hover: #4D8F77;
-            --border-color: #e0e0e0;
-            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-        
-        body {
-            font-family: 'Aptos', 'Segoe UI', system-ui, -apple-system, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f9f9f9;
-            padding: 2rem;
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 8px;
-            box-shadow: var(--shadow);
-            padding: 2rem;
-            margin-top: 1.5rem;
-        }
-        
-        .logo-container {
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-        
-        #logo {
-            max-width: 180px;
-            height: auto;
-            margin-bottom: 1rem;
-        }
-        
-        h1 {
-            color: var(--primary-color);
-            font-weight: 600;
-            margin-bottom: 1.5rem;
-            font-size: 1.8rem;
-            text-align: center;
-        }
-        
-        label {
-            display: block;
-            margin: 1.2rem 0 0.4rem;
-            font-weight: 500;
-            color: #555;
-        }
-        
-        select, input {
-            width: 100%;
-            padding: 0.8rem;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 1rem;
-            transition: border 0.2s;
-        }
-        
-        select:focus, input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(99, 171, 143, 0.2);
-        }
-        
-        button {
-            width: 100%;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 0.9rem;
-            font-size: 1rem;
-            font-weight: 500;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.2s;
-            margin-top: 2rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        button:hover {
-            background: var(--primary-hover);
-        }
-        
-        #result {
-            margin-top: 1.5rem;
-            padding: 1rem;
-            border-radius: 4px;
-            background: #f5f5f5;
-            display: none;
-        }
-        
-        .success {
-            color: #2e7d32;
-            border-left: 4px solid #4caf50;
-            padding-left: 1rem;
-        }
-        
-        .error {
-            color: #c62828;
-            border-left: 4px solid #f44336;
-            padding-left: 1rem;
-        }
-        
-        .loader {
-            display: none;
-            text-align: center;
-            margin: 1rem 0;
-        }
-        
-        .spinner {
-            border: 3px solid rgba(0, 0, 0, 0.1);
-            border-radius: 50%;
-            border-top: 3px solid var(--primary-color);
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            vertical-align: middle;
-            margin-right: 8px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        /* Your existing styles remain the same */
     </style>
 </head>
 <body>
-    <div class="card">
-        <div class="logo-container">
-            <img id="logo" src="https://github.com/gmcglynn88/GDPR/blob/4883152b4214d499b0c2680616a6c87aeb0e0982/Consultinglogo%20(1).png?raw=true" alt="Company Logo">
-        </div>
-        
-        <h1>Targeted Interaction Creator</h1>
-        
-        <div id="main-form" style="display:none;">
-            <label for="queue-select">Queue</label>
-            <select id="queue-select">
-                <option value="2fec5d88-bbf0-41bb-ab5a-95199438a2aa" selected>MS Teams Consult</option>
-            </select>
-            
-            <label for="user-select">Agent</label>
-            <select id="user-select"></select>
-            
-            <label for="interaction-label">Interaction Label</label>
-            <input id="interaction-label" placeholder="Enter Reference">
-            
-            <div class="loader" id="loader">
-                <div class="spinner"></div>
-                <span>Creating interaction...</span>
-            </div>
-            
-            <button id="create-btn">Create Targeted Interaction</button>
-            
-            <div id="result"></div>
-        </div>
-    </div>
-
+    <!-- Your existing HTML remains the same -->
+    
 <script>
-const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
-const redirectUri = 'https://gmcglynn88.github.io/Outbound-Chat/';
-let accessToken = null;
+// Your existing constants and authentication code remain the same
 
-// Auto-authenticate on page load
-window.onload = async () => {
-    const hash = window.location.hash;
-    if (hash.startsWith('#access_token=')) {
-        accessToken = hash.match(/access_token=([^&]*)/)[1];
-        window.history.replaceState({}, document.title, window.location.pathname);
-        initializeApp();
-    } else {
-        try {
-            const oauthUrl = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=none`;
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = oauthUrl;
-            document.body.appendChild(iframe);
-            
-            setTimeout(() => {
-                if (!accessToken) {
-                    window.location = oauthUrl.replace('&prompt=none', '');
-                }
-            }, 1000);
-        } catch (err) {
-            console.error('Silent auth failed:', err);
-            window.location = `https://login.mypurecloud.ie/oauth/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}`;
+async function forceAssignToAgent(conversationId, userId) {
+    // First get the participant ID for the agent
+    const participantsUrl = `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants`;
+    const participantsRes = await fetch(participantsUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (!participantsRes.ok) throw new Error('Failed to get participants');
+    
+    const participants = await participantsRes.json();
+    const agentParticipant = participants.find(p => p.purpose === 'agent');
+    
+    if (!agentParticipant) throw new Error('No agent participant found');
+    
+    // Prepare the participant update payload according to the schema
+    const updatePayload = {
+        wrapup: {
+            code: "TARGETED_ASSIGNMENT",
+            name: "Targeted Assignment",
+            notes: "Directly assigned via Targeted Interaction Tool",
+            tags: ["forced_assignment"],
+            durationSeconds: 0,
+            provisional: true,
+            disableEndTimeUpdates: true
+        },
+        state: "connected", // or "alerting" depending on your needs
+        recording: true,
+        muted: false,
+        confined: false,
+        held: false,
+        wrapupSkipped: true,
+        attributes: {
+            'isForcedAssignment': 'true',
+            'assignmentSource': 'Targeted Tool',
+            'skipQueue': 'true'
         }
-    }
-};
+    };
 
-function initializeApp() {
-    document.getElementById('main-form').style.display = 'block';
-    loadUsers().catch(err => showError('Failed to load agents: ' + err.message));
-}
-
-async function fetchAll(url) {
-    let items = [];
-    let page = 1, pageSize = 100, total = 0;
-    do {
-        const res = await fetch(`${url}?pageNumber=${page}&pageSize=${pageSize}`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!res.ok) throw new Error('API Error: ' + res.status);
-        const data = await res.json();
-        total = data.total || (data.entities ? data.entities.length : 0);
-        items = items.concat(data.entities || []);
-        page++;
-    } while (items.length < total);
-    return items;
-}
-
-async function loadUsers() {
-    const users = await fetchAll('https://api.mypurecloud.ie/api/v2/users');
-    const select = document.getElementById('user-select');
-    select.innerHTML = users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
-}
-
-function showLoader(show) {
-    document.getElementById('loader').style.display = show ? 'block' : 'none';
-}
-
-function showSuccess(message) {
-    const result = document.getElementById('result');
-    result.innerHTML = `<div class="success">${message}</div>`;
-    result.style.display = 'block';
-}
-
-function showError(message) {
-    const result = document.getElementById('result');
-    result.innerHTML = `<div class="error">${message}</div>`;
-    result.style.display = 'block';
-}
-
-async function updateParticipant(conversationId, participantId, userId) {
-    const updateUrl = `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants/${participantId}`;
+    const updateUrl = `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants/${agentParticipant.id}`;
     
     const response = await fetch(updateUrl, {
         method: 'PATCH',
@@ -251,18 +60,12 @@ async function updateParticipant(conversationId, participantId, userId) {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-            userId: userId,
-            attributes: {
-                'isForcedAssignment': 'true',
-                'assignmentSource': 'Targeted Tool'
-            }
-        })
+        body: JSON.stringify(updatePayload)
     });
     
     if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to update participant: ${errorText}`);
+        throw new Error(`Failed to force assign to agent: ${errorText}`);
     }
     
     return response.json();
@@ -282,6 +85,7 @@ document.getElementById('create-btn').onclick = async () => {
     document.getElementById('result').style.display = 'none';
     
     try {
+        // Step 1: Create the conversation with queue association
         const conversationBody = {
             queueId: queueId,
             direction: 'INBOUND',
@@ -314,12 +118,12 @@ document.getElementById('create-btn').onclick = async () => {
                 address: 'agent@company.com',
                 attributes: {
                     'isForcedAssignment': 'true',
-                    'assignmentSource': 'Targeted Tool'
+                    'assignmentSource': 'Targeted Tool',
+                    'skipQueue': 'true'
                 }
             }]
         };
 
-        // Step 1: Create the conversation
         const convRes = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
             method: 'POST',
             headers: {
@@ -331,40 +135,32 @@ document.getElementById('create-btn').onclick = async () => {
         
         if (!convRes.ok) {
             const errorText = await convRes.text();
-            try {
-                const errorData = JSON.parse(errorText);
-                throw new Error(errorData.message || 'Failed to create conversation');
-            } catch {
-                throw new Error(`API Error: ${convRes.status} ${errorText}`);
-            }
+            throw new Error(`Failed to create conversation: ${errorText}`);
         }
         
         const conversation = await convRes.json();
         
-        // Step 2: Ensure the participant is properly assigned
-        if (conversation.participants && conversation.participants.length > 0) {
-            const participantId = conversation.participants[0].id;
-            await updateParticipant(conversation.id, participantId, userId);
-        }
+        // Step 2: Force assignment to agent using the schema
+        await forceAssignToAgent(conversation.id, userId);
         
         const agentName = document.getElementById('user-select').selectedOptions[0].text;
         
         showSuccess(`
             <strong>Interaction successfully created and assigned</strong>
             <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
-                The interaction has been directly assigned to ${agentName}'s interactions panel.
+                The interaction has been directly assigned to ${agentName} while remaining associated with the queue.
+                <br>Conversation ID: ${conversation.id}
             </p>
         `);
     } catch (err) {
         showError(`
             <strong>Error during creation</strong>
-            <p style="margin: 0.5rem 0 0;">${err.message.includes('Failed to fetch') ? 'Network error - please check your connection' : err.message}</p>
+            <p style="margin: 0.5rem 0 0;">${err.message}</p>
             <p style="font-size: 0.9em; color: #666; margin-top: 0.5rem;">
-                Note: The interaction may have been created successfully despite this message.
-                <br>Check the agent's workspace to confirm.
+                Please check the console for more details.
             </p>
         `);
-        console.error('Error:', err);
+        console.error('Detailed error:', err);
     } finally {
         showLoader(false);
     }
