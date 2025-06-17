@@ -319,10 +319,10 @@ document.getElementById('create-btn').onclick = async () => {
     document.getElementById('result').style.display = 'none';
     
     try {
-        // Step 1: Create the email conversation
+        // Step 1: Create the email conversation with corrected provider value
         const conversationBody = {
             queueId: queueId,
-            provider: "purecloud",
+            provider: "external", // Changed from "purecloud" to "external"
             priority: 1,
             attributes: {
                 "targetedAgentId": userId,
