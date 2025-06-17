@@ -5,51 +5,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Genesys Targeted Interaction Creator</title>
     <style>
-        /* Your existing styles remain the same */
+        /* Your existing styles remain unchanged */
     </style>
 </head>
 <body>
-    <!-- Your existing HTML remains the same -->
+    <!-- Your existing HTML remains unchanged -->
     
 <script>
 // Your existing constants and authentication code remain the same
 
-async function forceAssignToAgent(conversationId, userId) {
-    // First get the participant ID for the agent
+async function directAssignToAgent(conversationId, userId) {
+    // First get all participants to find the agent
     const participantsUrl = `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants`;
     const participantsRes = await fetch(participantsUrl, {
         headers: { 'Authorization': `Bearer ${accessToken}` }
     });
     
-    if (!participantsRes.ok) throw new Error('Failed to get participants');
+    if (!participantsRes.ok) {
+        const error = await participantsRes.json();
+        throw new Error(`Failed to get participants: ${error.message}`);
+    }
     
     const participants = await participantsRes.json();
     const agentParticipant = participants.find(p => p.purpose === 'agent');
     
-    if (!agentParticipant) throw new Error('No agent participant found');
-    
-    // Prepare the participant update payload according to the schema
+    if (!agentParticipant) {
+        throw new Error('No agent participant found in conversation');
+    }
+
+    // Prepare the exact participant update schema you provided
     const updatePayload = {
         wrapup: {
-            code: "TARGETED_ASSIGNMENT",
-            name: "Targeted Assignment",
-            notes: "Directly assigned via Targeted Interaction Tool",
-            tags: ["forced_assignment"],
+            code: "DIRECT_ASSIGN",
+            name: "Direct Assignment",
+            notes: "Assigned directly to agent via tool",
+            tags: ["direct_assignment"],
             durationSeconds: 0,
+            endTime: new Date().toISOString(),
             provisional: true,
             disableEndTimeUpdates: true
         },
-        state: "connected", // or "alerting" depending on your needs
-        recording: true,
-        muted: false,
-        confined: false,
-        held: false,
-        wrapupSkipped: true,
-        attributes: {
-            'isForcedAssignment': 'true',
-            'assignmentSource': 'Targeted Tool',
-            'skipQueue': 'true'
-        }
+        state: "connected", // Keeps the conversation active
+        recording: true,    // Ensures recording continues
+        muted: false,       // Not muted so agent can interact
+        confined: false,    // Not confined
+        held: false,        // Not on hold
+        wrapupSkipped: true // Skip wrapup since just assigned
     };
 
     const updateUrl = `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversationId}/participants/${agentParticipant.id}`;
@@ -64,8 +65,8 @@ async function forceAssignToAgent(conversationId, userId) {
     });
     
     if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to force assign to agent: ${errorText}`);
+        const error = await response.json();
+        throw new Error(`Failed to assign to agent: ${error.message}`);
     }
     
     return response.json();
@@ -76,7 +77,7 @@ document.getElementById('create-btn').onclick = async () => {
     const userId = document.getElementById('user-select').value;
     const interactionLabel = document.getElementById('interaction-label').value;
     
-    if (!interactionLabel || interactionLabel.trim() === '') {
+    if (!interactionLabel) {
         showError('Please enter a reference for the interaction');
         return;
     }
@@ -85,43 +86,34 @@ document.getElementById('create-btn').onclick = async () => {
     document.getElementById('result').style.display = 'none';
     
     try {
-        // Step 1: Create the conversation with queue association
+        // Step 1: Create the email conversation using the exact schema provided
         const conversationBody = {
             queueId: queueId,
-            direction: 'INBOUND',
-            fromName: interactionLabel,
-            fromAddress: 'targeted@company.com',
-            subject: interactionLabel,
+            provider: "purecloud",
             priority: 1,
-            autoAnswer: true,
-            provider: 'external',
             attributes: {
-                'targetedAgentId': userId,
-                'isForcedAssignment': 'true',
-                'interactionLabel': interactionLabel,
-                'createdVia': 'Targeted Interaction Tool',
-                'skipQueue': 'true'
+                "targetedAgentId": userId,
+                "isForcedAssignment": "true",
+                "interactionLabel": interactionLabel,
+                "skipQueue": "true",
+                "createdVia": "Targeted Interaction Tool"
             },
-            toAddresses: ['support@company.com'],
+            toAddress: "support@company.com",
+            fromAddress: "targeted@company.com",
+            fromName: interactionLabel,
+            subject: interactionLabel,
+            direction: "inbound",
             htmlBody: `
-                <div style="font-family: Aptos, sans-serif; line-height: 1.5;">
+                <div style="font-family: Aptos, sans-serif;">
                     <h3 style="color: #63AB8F;">${interactionLabel}</h3>
-                    <p>This interaction was specifically assigned to you.</p>
+                    <p>This interaction was directly assigned to you.</p>
                     <p style="color: #666; font-size: 0.9em;">
                         Created: ${new Date().toLocaleString()}
                     </p>
                 </div>
             `,
-            participants: [{
-                userId: userId,
-                purpose: 'agent',
-                address: 'agent@company.com',
-                attributes: {
-                    'isForcedAssignment': 'true',
-                    'assignmentSource': 'Targeted Tool',
-                    'skipQueue': 'true'
-                }
-            }]
+            textBody: `Directly assigned interaction: ${interactionLabel}`,
+            utilizationLabel: "direct_assignment"
         };
 
         const convRes = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
@@ -134,30 +126,43 @@ document.getElementById('create-btn').onclick = async () => {
         });
         
         if (!convRes.ok) {
-            const errorText = await convRes.text();
-            throw new Error(`Failed to create conversation: ${errorText}`);
+            const error = await convRes.json();
+            throw new Error(`Conversation creation failed: ${error.message}`);
         }
         
         const conversation = await convRes.json();
         
-        // Step 2: Force assignment to agent using the schema
-        await forceAssignToAgent(conversation.id, userId);
+        // Step 2: Immediately assign to selected agent
+        await directAssignToAgent(conversation.id, userId);
         
+        // Step 3: Verify assignment
+        const verifyUrl = `https://api.mypurecloud.ie/api/v2/conversations/emails/${conversation.id}`;
+        const verifyRes = await fetch(verifyUrl, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (!verifyRes.ok) {
+            throw new Error('Failed to verify assignment');
+        }
+        
+        const verifiedConv = await verifyRes.json();
         const agentName = document.getElementById('user-select').selectedOptions[0].text;
         
         showSuccess(`
-            <strong>Interaction successfully created and assigned</strong>
-            <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
-                The interaction has been directly assigned to ${agentName} while remaining associated with the queue.
-                <br>Conversation ID: ${conversation.id}
+            <strong>Successfully created and assigned</strong>
+            <p>Interaction <strong>${interactionLabel}</strong> is now with ${agentName}</p>
+            <p style="font-size: 0.9em; color: #666;">
+                Conversation ID: ${conversation.id}<br>
+                Queue association maintained
             </p>
         `);
+        
     } catch (err) {
         showError(`
-            <strong>Error during creation</strong>
-            <p style="margin: 0.5rem 0 0;">${err.message}</p>
-            <p style="font-size: 0.9em; color: #666; margin-top: 0.5rem;">
-                Please check the console for more details.
+            <strong>Assignment failed</strong>
+            <p>${err.message}</p>
+            <p style="font-size: 0.9em; color: #666;">
+                Check console for details and verify in Genesys Admin.
             </p>
         `);
         console.error('Detailed error:', err);
