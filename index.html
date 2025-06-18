@@ -42,7 +42,7 @@ let accessToken = null;
 const WORKTYPE_ID = 'a8eeb0b6-0227-4801-a44b-facf072870fc';
 const WORKBIN_ID = 'fd656305-e126-4b77-b98a-0c2a75783bc';
 const QUEUE_ID = '2fec5d88-bbf0-41bb-ab5a-95199438a2aa';
-const DEFAULT_STATUS = 'Open'; // Common default status name
+let STATUS_ID = ''; // We'll fetch this dynamically
 
 // OAuth Flow
 window.onload = async () => {
@@ -59,20 +59,38 @@ window.onload = async () => {
 // Initialize the app
 async function initializeApp() {
     try {
-        const response = await fetch('https://api.mypurecloud.ie/api/v2/users?pageSize=100', {
+        // First fetch the status ID for the worktype
+        const statusResponse = await fetch(`https://api.mypurecloud.ie/api/v2/taskmanagement/worktypes/${WORKTYPE_ID}/statuses`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         
-        if (!response.ok) throw new Error('Failed to fetch users');
+        if (!statusResponse.ok) throw new Error('Failed to fetch statuses');
         
-        const data = await response.json();
+        const statusData = await statusResponse.json();
+        if (statusData.entities && statusData.entities.length > 0) {
+            // Find the "Open" status or use the first available
+            const openStatus = statusData.entities.find(s => s.name === 'Open') || statusData.entities[0];
+            STATUS_ID = openStatus.id;
+        } else {
+            throw new Error('No statuses found for this worktype');
+        }
+        
+        // Then fetch users
+        const usersResponse = await fetch('https://api.mypurecloud.ie/api/v2/users?pageSize=100', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (!usersResponse.ok) throw new Error('Failed to fetch users');
+        
+        const usersData = await usersResponse.json();
         const select = document.getElementById('user-select');
         
-        data.entities.forEach(user => {
+        usersData.entities.forEach(user => {
             select.innerHTML += `<option value="${user.id}">${user.name}</option>`;
         });
+        
     } catch (err) {
-        showError('Failed to load agents: ' + err.message);
+        showError('Initialization failed: ' + err.message);
     }
 }
 
@@ -88,11 +106,16 @@ document.getElementById('create-btn').onclick = async () => {
         return;
     }
 
+    if (!STATUS_ID) {
+        showError('Workitem status not available - please refresh');
+        return;
+    }
+
     try {
         const workitem = {
             name: name,
             typeId: WORKTYPE_ID,
-            statusId: DEFAULT_STATUS,
+            statusId: STATUS_ID, // Now using the proper UUID
             workbinId: WORKBIN_ID,
             queueId: QUEUE_ID,
             assigneeId: userId,
