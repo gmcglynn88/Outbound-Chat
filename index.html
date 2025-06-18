@@ -297,6 +297,7 @@ document.getElementById('create-btn').onclick = async () => {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
+            
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(conversationBody)
@@ -317,12 +318,8 @@ document.getElementById('create-btn').onclick = async () => {
         
         showSuccess(`
             <strong>Interaction successfully created and assigned</strong>
-            <p style="margin: 0.5rem 0 0;">
-                <strong>Agent:</strong> ${agentName}<br>
-                <strong>Reference:</strong> ${interactionLabel}
-            </p>
             <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
-                The interaction has been directly assigned to the agent and should appear in their workspace immediately.
+                The interaction has been directly assigned to your interactions pannel.
             </p>
         `);
     } catch (err) {
