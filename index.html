@@ -147,11 +147,11 @@
         <div id="main-form" style="display:none;">
             <label for="queue-select">Queue</label>
             <select id="queue-select">
-                <option value="2fec5d88-bbf0-41bb-ab5a-95199438a2aa" selected>MS Teams Consult</option>
+                <!-- Queues will be populated dynamically -->
             </select>
             
             <label for="user-select">Agent</label>
-            <select id="user-select"></select>
+            <input id="user-select" type="text" readonly>
             
             <label for="interaction-label">Interaction Label</label>
             <input id="interaction-label" placeholder="Enter Reference">
@@ -171,6 +171,7 @@
 const clientId = '96d0dde8-a96f-44fb-b039-5e578a1e78b3';
 const redirectUri = 'https://gmcglynn88.github.io/Outbound-Chat/';
 let accessToken = null;
+let currentUser = null;
 
 // Auto-authenticate on page load
 window.onload = async () => {
@@ -199,31 +200,42 @@ window.onload = async () => {
     }
 };
 
-function initializeApp() {
-    document.getElementById('main-form').style.display = 'block';
-    loadUsers().catch(err => showError('Failed to load agents: ' + err.message));
-}
-
-async function fetchAll(url) {
-    let items = [];
-    let page = 1, pageSize = 100, total = 0;
-    do {
-        const res = await fetch(`${url}?pageNumber=${page}&pageSize=${pageSize}`, {
+async function initializeApp() {
+    try {
+        // Get the current user
+        const userRes = await fetch('https://api.mypurecloud.ie/api/v2/users/me', {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
-        if (!res.ok) throw new Error('API Error: ' + res.status);
-        const data = await res.json();
-        total = data.total || (data.entities ? data.entities.length : 0);
-        items = items.concat(data.entities || []);
-        page++;
-    } while (items.length < total);
-    return items;
-}
-
-async function loadUsers() {
-    const users = await fetchAll('https://api.mypurecloud.ie/api/v2/users');
-    const select = document.getElementById('user-select');
-    select.innerHTML = users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+        if (!userRes.ok) throw new Error('Failed to fetch user info');
+        currentUser = await userRes.json();
+        
+        // Set the agent field (readonly)
+        document.getElementById('user-select').value = currentUser.name;
+        
+        // Get the user's queues
+        const queuesRes = await fetch('https://api.mypurecloud.ie/api/v2/routing/queues/me', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!queuesRes.ok) throw new Error('Failed to fetch user queues');
+        const queuesData = await queuesRes.json();
+        const queues = queuesData.entities || [];
+        
+        // Populate the queue dropdown
+        const queueSelect = document.getElementById('queue-select');
+        queueSelect.innerHTML = queues.map(q => 
+            `<option value="${q.id}">${q.name}</option>`
+        ).join('');
+        
+        // If there's only one queue, select it by default
+        if (queues.length === 1) {
+            queueSelect.value = queues[0].id;
+        }
+        
+        document.getElementById('main-form').style.display = 'block';
+    } catch (err) {
+        showError('Failed to initialize application: ' + err.message);
+        console.error('Initialization error:', err);
+    }
 }
 
 function showLoader(show) {
@@ -243,13 +255,18 @@ function showError(message) {
 }
 
 document.getElementById('create-btn').onclick = async () => {
-    const queueId = "2fec5d88-bbf0-41bb-ab5a-95199438a2aa";
-    const queueName = "MS Teams Consult";
-    const userId = document.getElementById('user-select').value;
+    const queueId = document.getElementById('queue-select').value;
+    const queueName = document.getElementById('queue-select').selectedOptions[0].text;
+    const userId = currentUser.id;
     const interactionLabel = document.getElementById('interaction-label').value;
     
     if (!interactionLabel || interactionLabel.trim() === '') {
         showError('Please enter a reference for the interaction');
+        return;
+    }
+    
+    if (!queueId) {
+        showError('Please select a queue');
         return;
     }
     
@@ -319,11 +336,11 @@ document.getElementById('create-btn').onclick = async () => {
             <strong>Interaction successfully created and assigned</strong>
             <p style="margin: 0.5rem 0 0;">
                 <strong>Queue:</strong> ${queueName}<br>
-                <strong>Agent:</strong> ${document.getElementById('user-select').selectedOptions[0].text}<br>
+                <strong>Agent:</strong> ${currentUser.name}<br>
                 <strong>ID:</strong> ${conversation.id}
             </p>
             <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
-                The interaction has been directly assigned to the agent and should appear in their workspace immediately.
+                The interaction has been directly assigned to you and should appear in your workspace immediately.
             </p>
         `);
     } catch (err) {
@@ -332,7 +349,7 @@ document.getElementById('create-btn').onclick = async () => {
             <p style="margin: 0.5rem 0 0;">${err.message.includes('Failed to fetch') ? 'Network error - please check your connection' : err.message}</p>
             <p style="font-size: 0.9em; color: #666; margin-top: 0.5rem;">
                 Note: The interaction may have been created successfully despite this message.
-                <br>Check the agent's workspace to confirm.
+                <br>Check your workspace to confirm.
             </p>
         `);
         console.error('Error:', err);
