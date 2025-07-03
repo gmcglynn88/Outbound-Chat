@@ -274,6 +274,7 @@ document.getElementById('create-btn').onclick = async () => {
     document.getElementById('result').style.display = 'none';
     
     try {
+        // Step 1: Create the email conversation in the queue
         const conversationBody = {
             queueId: queueId,
             direction: 'INBOUND',
@@ -284,11 +285,8 @@ document.getElementById('create-btn').onclick = async () => {
             autoAnswer: true,
             provider: 'external',
             attributes: {
-                'targetedAgentId': userId,
-                'isForcedAssignment': 'true',
                 'interactionLabel': interactionLabel,
-                'createdVia': 'Targeted Interaction Tool',
-                'skipQueue': 'true'
+                'createdVia': 'Targeted Interaction Tool'
             },
             toAddresses: ['support@company.com'],
             htmlBody: `
@@ -299,16 +297,7 @@ document.getElementById('create-btn').onclick = async () => {
                         Created: ${new Date().toLocaleString()}
                     </p>
                 </div>
-            `,
-            participants: [{
-                userId: userId,
-                purpose: 'agent',
-                address: 'agent@company.com',
-                attributes: {
-                    'isForcedAssignment': 'true',
-                    'assignmentSource': 'Targeted Tool'
-                }
-            }]
+            `
         };
 
         const convRes = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
@@ -332,6 +321,51 @@ document.getElementById('create-btn').onclick = async () => {
         
         const conversation = await convRes.json();
         
+        // Step 2: Get the participant ID for the queue
+        const participantsRes = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/emails/${conversation.id}/participants`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (!participantsRes.ok) {
+            throw new Error('Failed to get conversation participants');
+        }
+        
+        const participants = await participantsRes.json();
+        const queueParticipant = participants.find(p => p.purpose === "queue");
+        
+        if (!queueParticipant) {
+            throw new Error('Could not find queue participant in conversation');
+        }
+        
+        // Step 3: Assign the conversation to the current user
+        const assignBody = {
+            userId: userId,
+            purpose: 'agent',
+            attributes: {
+                'isForcedAssignment': 'true',
+                'assignmentSource': 'Targeted Tool'
+            }
+        };
+        
+        const assignRes = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/emails/${conversation.id}/participants/${queueParticipant.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(assignBody)
+        });
+        
+        if (!assignRes.ok) {
+            const errorText = await assignRes.text();
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData.message || 'Failed to assign conversation');
+            } catch {
+                throw new Error(`API Error: ${assignRes.status} ${errorText}`);
+            }
+        }
+        
         showSuccess(`
             <strong>Interaction successfully created and assigned</strong>
             <p style="margin: 0.5rem 0 0;">
@@ -340,7 +374,7 @@ document.getElementById('create-btn').onclick = async () => {
                 <strong>ID:</strong> ${conversation.id}
             </p>
             <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
-                The interaction has been directly assigned to you and should appear in your workspace immediately.
+                The interaction has been created in the ${queueName} queue and directly assigned to you.
             </p>
         `);
     } catch (err) {
