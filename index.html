@@ -274,7 +274,7 @@ document.getElementById('create-btn').onclick = async () => {
     document.getElementById('result').style.display = 'none';
     
     try {
-        // Create the email conversation with forced assignment
+        // Step 1: Create the email conversation in the queue
         const conversationBody = {
             queueId: queueId,
             direction: 'INBOUND',
@@ -285,11 +285,8 @@ document.getElementById('create-btn').onclick = async () => {
             autoAnswer: true,
             provider: 'external',
             attributes: {
-                'targetedAgentId': userId,
-                'isForcedAssignment': 'true',
                 'interactionLabel': interactionLabel,
-                'createdVia': 'Targeted Interaction Tool',
-                'skipQueue': 'false' // Maintain queue association
+                'createdVia': 'Targeted Interaction Tool'
             },
             toAddresses: ['support@company.com'],
             htmlBody: `
@@ -300,16 +297,7 @@ document.getElementById('create-btn').onclick = async () => {
                         Created: ${new Date().toLocaleString()}
                     </p>
                 </div>
-            `,
-            participants: [{
-                userId: userId,
-                purpose: 'agent',
-                address: 'agent@company.com',
-                attributes: {
-                    'isForcedAssignment': 'true',
-                    'assignmentSource': 'Targeted Tool'
-                }
-            }]
+            `
         };
 
         const convRes = await fetch('https://api.mypurecloud.ie/api/v2/conversations/emails', {
@@ -333,20 +321,60 @@ document.getElementById('create-btn').onclick = async () => {
         
         const conversation = await convRes.json();
         
-        // Verify the assignment was successful
+        // Step 2: Get the participant ID for the queue
         const participantsRes = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/emails/${conversation.id}/participants`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         
         if (!participantsRes.ok) {
-            throw new Error('Failed to verify conversation assignment');
+            throw new Error('Failed to get conversation participants');
         }
         
         const participants = await participantsRes.json();
-        const agentParticipant = participants.find(p => p.user && p.user.id === userId);
+        const queueParticipant = participants.find(p => p.purpose === "queue");
         
-        if (!agentParticipant) {
-            throw new Error('Failed to confirm agent assignment');
+        if (!queueParticipant) {
+            throw new Error('Could not find queue participant in conversation');
+        }
+        
+        // Step 3: Assign the conversation to the current user with proper state
+        const assignBody = {
+            userId: userId,
+            purpose: 'agent',
+            state: "connected",
+            wrapup: {
+                code: "",
+                name: "",
+                notes: "",
+                tags: [""],
+                durationSeconds: 0,
+                endTime: "",
+                provisional: true,
+                disableEndTimeUpdates: true
+            },
+            attributes: {
+                'isForcedAssignment': 'true',
+                'assignmentSource': 'Targeted Tool'
+            }
+        };
+        
+        const assignRes = await fetch(`https://api.mypurecloud.ie/api/v2/conversations/emails/${conversation.id}/participants/${queueParticipant.id}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(assignBody)
+        });
+        
+        if (!assignRes.ok) {
+            const errorText = await assignRes.text();
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData.message || 'Failed to assign conversation');
+            } catch {
+                throw new Error(`API Error: ${assignRes.status} ${errorText}`);
+            }
         }
         
         showSuccess(`
@@ -354,21 +382,19 @@ document.getElementById('create-btn').onclick = async () => {
             <p style="margin: 0.5rem 0 0;">
                 <strong>Queue:</strong> ${queueName}<br>
                 <strong>Agent:</strong> ${currentUser.name}<br>
-                <strong>Conversation ID:</strong> ${conversation.id}
+                <strong>ID:</strong> ${conversation.id}
             </p>
             <p style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
-                The interaction has been created in ${queueName} and directly assigned to you.
-                It will appear in your workspace immediately.
+                The interaction has been created in the ${queueName} queue and directly assigned to you.
             </p>
         `);
     } catch (err) {
         showError(`
             <strong>Error during creation</strong>
-            <p style="margin: 0.5rem 0 0;">${err.message.includes('Failed to fetch') ? 
-              'Network error - please check your connection' : err.message}</p>
+            <p style="margin: 0.5rem 0 0;">${err.message.includes('Failed to fetch') ? 'Network error - please check your connection' : err.message}</p>
             <p style="font-size: 0.9em; color: #666; margin-top: 0.5rem;">
-                Please check your workspace to confirm if the interaction was created.
-                You may need to refresh your view.
+                Note: The interaction may have been created successfully despite this message.
+                <br>Check your workspace to confirm.
             </p>
         `);
         console.error('Error:', err);
