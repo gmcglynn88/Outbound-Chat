@@ -409,17 +409,6 @@ document.getElementById('create-btn').onclick = async () => {
                 It should appear in your workspace immediately.
             </p>
         `);
-    } catch (err) {
-        showError(`
-            <strong>Interaction successfully created and assigned</strong>
-            <p style="margin: 0.5rem 0 0;">
-              'Interaction successfully created and assigned' : err.message}</p>
-            <p style="font-size: 0.9em; color: #666; margin-top: 0.5rem;">
-                The interaction has been created in ${queueName} and directly assigned to you.
-                It should appear in your workspace immediately.
-            </p>
-        `);
-        console.error('Error:', err);
     } finally {
         showLoader(false);
     }
